@@ -42,6 +42,9 @@ public class DocumentChunk {
     @Column(nullable = false)
     private int endOffset;
 
+    @Column(nullable = false, columnDefinition = "integer default 1")
+    private int pageNumber;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

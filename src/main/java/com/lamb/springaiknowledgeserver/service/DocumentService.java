@@ -16,14 +16,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final RoleRepository roleRepository;
+    private final VectorStore vectorStore;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -60,7 +64,7 @@ public class DocumentService {
         document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(roles);
         Document saved = documentRepository.save(document);
-        rebuildChunks(saved);
+        rebuildChunks(saved, null);
         return saved;
     }
 
@@ -79,7 +83,8 @@ public class DocumentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PDF or TXT is supported");
         }
 
-        String extracted = isPdf ? extractPdfText(file) : extractText(file);
+        ParsedPdf parsedPdf = isPdf ? extractPdfPages(file) : null;
+        String extracted = isPdf ? parsedPdf.text : extractText(file);
         Path target = storeFile(file, safeName);
 
         Document document = new Document();
@@ -92,7 +97,7 @@ public class DocumentService {
         document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(resolveRoles(roleNames));
         Document saved = documentRepository.save(document);
-        rebuildChunks(saved);
+        rebuildChunks(saved, parsedPdf == null ? null : parsedPdf.pages);
         return saved;
     }
 
@@ -101,8 +106,13 @@ public class DocumentService {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
         boolean contentChanged = false;
+        boolean titleChanged = false;
+        boolean rolesChanged = false;
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
-            document.setTitle(request.getTitle());
+            if (!request.getTitle().equals(document.getTitle())) {
+                document.setTitle(request.getTitle());
+                titleChanged = true;
+            }
         }
         if (request.getContent() != null) {
             document.setContent(request.getContent());
@@ -112,13 +122,16 @@ public class DocumentService {
         }
         if (request.getAllowedRoles() != null) {
             document.setAllowedRoles(resolveRoles(request.getAllowedRoles()));
+            rolesChanged = true;
         }
         if (request.getStatus() != null) {
             document.setStatus(request.getStatus());
         }
         Document saved = documentRepository.save(document);
         if (contentChanged) {
-            rebuildChunks(saved);
+            rebuildChunks(saved, null);
+        } else if (rolesChanged || titleChanged) {
+            refreshVectorMetadata(saved);
         }
         return saved;
     }
@@ -128,6 +141,8 @@ public class DocumentService {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
         deleteFileIfExists(document.getStoragePath());
+        List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(id);
+        deleteVectors(id, existing);
         documentChunkRepository.deleteByDocumentId(id);
         documentRepository.delete(document);
     }
@@ -149,12 +164,18 @@ public class DocumentService {
         return document;
     }
 
-    private void rebuildChunks(Document document) {
+    private void rebuildChunks(Document document, List<PageText> pages) {
+        List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId());
+        deleteVectors(document.getId(), existing);
         documentChunkRepository.deleteByDocumentId(document.getId());
-        List<DocumentChunk> chunks = splitToChunks(document);
-        if (!chunks.isEmpty()) {
-            documentChunkRepository.saveAll(chunks);
+        List<DocumentChunk> chunks = (pages == null || pages.isEmpty())
+            ? splitToChunks(document)
+            : splitToChunks(document, pages);
+        if (chunks.isEmpty()) {
+            return;
         }
+        List<DocumentChunk> saved = documentChunkRepository.saveAll(chunks);
+        vectorStore.add(toVectorDocuments(document, saved));
     }
 
     private List<DocumentChunk> splitToChunks(Document document) {
@@ -183,12 +204,109 @@ public class DocumentService {
             chunk.setContent(slice);
             chunk.setStartOffset(start);
             chunk.setEndOffset(end);
+            chunk.setPageNumber(1);
             result.add(chunk);
             if (end == content.length()) {
                 break;
             }
         }
         return result;
+    }
+
+    private List<DocumentChunk> splitToChunks(Document document, List<PageText> pages) {
+        int size = Math.max(1, chunkSize);
+        int overlap = Math.max(0, chunkOverlap);
+        if (overlap >= size) {
+            overlap = size - 1;
+        }
+        int step = size - overlap;
+        if (step <= 0) {
+            step = size;
+        }
+
+        List<DocumentChunk> result = new ArrayList<>();
+        int index = 0;
+        int offsetBase = 0;
+        for (int pageIndex = 0; pageIndex < pages.size(); pageIndex++) {
+            PageText page = pages.get(pageIndex);
+            String content = page.text;
+            if (content == null || content.isBlank()) {
+                offsetBase += content == null ? 0 : content.length();
+                if (pageIndex < pages.size() - 1) {
+                    offsetBase += 1;
+                }
+                continue;
+            }
+            for (int start = 0; start < content.length(); start += step) {
+                int end = Math.min(content.length(), start + size);
+                String slice = content.substring(start, end);
+                DocumentChunk chunk = new DocumentChunk();
+                chunk.setDocument(document);
+                chunk.setChunkIndex(index++);
+                chunk.setContent(slice);
+                chunk.setStartOffset(offsetBase + start);
+                chunk.setEndOffset(offsetBase + end);
+                chunk.setPageNumber(page.pageNumber);
+                result.add(chunk);
+                if (end == content.length()) {
+                    break;
+                }
+            }
+            offsetBase += content.length();
+            if (pageIndex < pages.size() - 1) {
+                offsetBase += 1;
+            }
+        }
+        return result;
+    }
+
+    private void refreshVectorMetadata(Document document) {
+        List<DocumentChunk> chunks = documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId());
+        if (chunks.isEmpty()) {
+            return;
+        }
+        vectorStore.add(toVectorDocuments(document, chunks));
+    }
+
+    private void deleteVectors(Long documentId, List<DocumentChunk> chunks) {
+        if (documentId == null || chunks == null || chunks.isEmpty()) {
+            return;
+        }
+        List<String> ids = new ArrayList<>();
+        for (DocumentChunk chunk : chunks) {
+            ids.add(vectorId(documentId, chunk.getId()));
+        }
+        vectorStore.delete(ids);
+    }
+
+    private List<org.springframework.ai.document.Document> toVectorDocuments(Document document, List<DocumentChunk> chunks) {
+        List<String> roleNames = document.getAllowedRoles().stream()
+            .map(Role::getName)
+            .toList();
+        List<org.springframework.ai.document.Document> result = new ArrayList<>();
+        for (DocumentChunk chunk : chunks) {
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("documentId", document.getId());
+            metadata.put("chunkId", chunk.getId());
+            metadata.put("chunkIndex", chunk.getChunkIndex());
+            metadata.put("pageNumber", chunk.getPageNumber());
+            metadata.put("startOffset", chunk.getStartOffset());
+            metadata.put("endOffset", chunk.getEndOffset());
+            metadata.put("roleNames", roleNames);
+            metadata.put("title", document.getTitle());
+            metadata.put("fileName", document.getFileName());
+            metadata.put("contentType", document.getContentType());
+            result.add(new org.springframework.ai.document.Document(
+                vectorId(document.getId(), chunk.getId()),
+                chunk.getContent(),
+                metadata
+            ));
+        }
+        return result;
+    }
+
+    private String vectorId(Long documentId, Long chunkId) {
+        return "doc-" + documentId + "-chunk-" + chunkId;
     }
 
     private Path storeFile(MultipartFile file, String safeName) {
@@ -223,15 +341,51 @@ public class DocumentService {
         }
     }
 
-    private String extractPdfText(MultipartFile file) {
+    private ParsedPdf extractPdfPages(MultipartFile file) {
         try {
             byte[] bytes = file.getBytes();
             try (PDDocument doc = Loader.loadPDF(bytes)) {
                 PDFTextStripper stripper = new PDFTextStripper();
-                return stripper.getText(doc);
+                int totalPages = doc.getNumberOfPages();
+                List<PageText> pages = new ArrayList<>();
+                StringBuilder full = new StringBuilder();
+                for (int page = 1; page <= totalPages; page++) {
+                    stripper.setStartPage(page);
+                    stripper.setEndPage(page);
+                    String text = stripper.getText(doc);
+                    if (text == null) {
+                        text = "";
+                    }
+                    pages.add(new PageText(page, text));
+                    full.append(text);
+                    if (page < totalPages) {
+                        full.append('\n');
+                    }
+                }
+                return new ParsedPdf(full.toString(), pages);
             }
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read PDF", ex);
+        }
+    }
+
+    private static final class ParsedPdf {
+        private final String text;
+        private final List<PageText> pages;
+
+        private ParsedPdf(String text, List<PageText> pages) {
+            this.text = text;
+            this.pages = pages;
+        }
+    }
+
+    private static final class PageText {
+        private final int pageNumber;
+        private final String text;
+
+        private PageText(int pageNumber, String text) {
+            this.pageNumber = pageNumber;
+            this.text = text;
         }
     }
 

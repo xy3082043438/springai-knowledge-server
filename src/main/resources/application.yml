@@ -25,6 +25,12 @@ spring:
       embedding:
         options:
           model: BAAI/bge-large-zh-v1.5
+    vectorstore:
+      pgvector:
+        dimensions: 1024
+        initialize-schema: true
+        table-name: document_embedding
+        id-type: TEXT
 
   servlet:
     multipart:
