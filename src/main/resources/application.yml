@@ -6,6 +6,15 @@ spring:
       url: jdbc:postgresql://localhost:5432/springai_knowledge
       username: postgres
       password: ${PG_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+  rabbitmq:
+    password: ${RABBITMQ_PASSWORD}
+
   ai:
     openai:
       base-url: https://api.siliconflow.cn
@@ -16,3 +25,13 @@ spring:
       embedding:
         options:
           model: BAAI/bge-large-zh-v1.5
+
+security:
+  jwt:
+    secret: change-me-please-change-me-32-bytes
+    expiration-seconds: 3600
+
+app:
+  admin:
+    username: admin
+    password: admin123
