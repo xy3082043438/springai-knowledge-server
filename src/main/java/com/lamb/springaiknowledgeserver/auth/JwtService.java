@@ -33,10 +33,11 @@ public class JwtService {
 
     public String generateToken(User user) {
         Instant now = Instant.now();
+        String roleName = user.getRole() != null ? user.getRole().getName() : "UNKNOWN";
         return Jwts.builder()
             .subject(user.getUsername())
             .claim("uid", user.getId())
-            .claim("role", user.getRole().name())
+            .claim("role", roleName)
             .claim("ver", user.getTokenVersion())
             .issuedAt(Date.from(now))
             .expiration(Date.from(now.plusSeconds(expirationSeconds)))

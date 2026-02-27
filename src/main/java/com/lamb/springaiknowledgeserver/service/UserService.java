@@ -3,8 +3,9 @@ package com.lamb.springaiknowledgeserver.service;
 import com.lamb.springaiknowledgeserver.dto.MeUpdateRequest;
 import com.lamb.springaiknowledgeserver.dto.UserCreateRequest;
 import com.lamb.springaiknowledgeserver.dto.UserUpdateRequest;
+import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.entity.User;
-import com.lamb.springaiknowledgeserver.entity.UserRole;
+import com.lamb.springaiknowledgeserver.repository.RoleRepository;
 import com.lamb.springaiknowledgeserver.repository.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<User> listUsers() {
@@ -33,10 +35,11 @@ public class UserService {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
+        Role role = resolveRole(request.getRole());
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRole(request.getRole() == null ? UserRole.USER : request.getRole());
+        user.setRole(role);
         return userRepository.save(user);
     }
 
@@ -49,8 +52,8 @@ public class UserService {
             }
             user.setUsername(request.getUsername());
         }
-        if (request.getRole() != null) {
-            user.setRole(request.getRole());
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            user.setRole(resolveRole(request.getRole()));
         }
         return userRepository.save(user);
     }
@@ -65,5 +68,11 @@ public class UserService {
             user.setUsername(request.getUsername());
         }
         return userRepository.save(user);
+    }
+
+    private Role resolveRole(String roleName) {
+        String effectiveName = (roleName == null || roleName.isBlank()) ? "USER" : roleName;
+        return roleRepository.findByName(effectiveName)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role not found"));
     }
 }

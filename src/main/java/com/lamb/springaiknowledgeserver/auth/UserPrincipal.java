@@ -1,8 +1,11 @@
 package com.lamb.springaiknowledgeserver.auth;
 
 import com.lamb.springaiknowledgeserver.entity.User;
-import com.lamb.springaiknowledgeserver.entity.UserRole;
+import com.lamb.springaiknowledgeserver.entity.Permission;
+import com.lamb.springaiknowledgeserver.entity.Role;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import lombok.Getter;
@@ -17,28 +20,29 @@ public class UserPrincipal implements UserDetails {
     private final long id;
     private final String username;
     private final String password;
-    private final UserRole role;
+    private final List<GrantedAuthority> authorities;
 
-    private UserPrincipal(long id, String username, String password, UserRole role) {
+    private UserPrincipal(long id, String username, String password, List<GrantedAuthority> authorities) {
         this.id = id;
         this.username = username;
         this.password = password;
-        this.role = role;
+        this.authorities = authorities;
     }
 
     public static UserPrincipal from(User user) {
         Long id = Objects.requireNonNull(user.getId(), "User id must not be null");
+        List<GrantedAuthority> authorities = buildAuthorities(user.getRole());
         return new UserPrincipal(
             id,
             user.getUsername(),
             user.getPasswordHash(),
-            user.getRole()
+            authorities
         );
     }
 
     @Override
     public @NonNull Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+        return authorities;
     }
 
     @Override
@@ -69,5 +73,17 @@ public class UserPrincipal implements UserDetails {
     @Override
     public @NonNull String getPassword() {
         return password;
+    }
+
+    private static List<GrantedAuthority> buildAuthorities(Role role) {
+        if (role == null) {
+            return List.of();
+        }
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
+        for (Permission permission : role.getPermissions()) {
+            authorities.add(new SimpleGrantedAuthority(permission.name()));
+        }
+        return Collections.unmodifiableList(authorities);
     }
 }

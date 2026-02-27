@@ -1,8 +1,11 @@
 package com.lamb.springaiknowledgeserver.bootstrap;
 
+import com.lamb.springaiknowledgeserver.entity.Permission;
+import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.entity.User;
-import com.lamb.springaiknowledgeserver.entity.UserRole;
+import com.lamb.springaiknowledgeserver.repository.RoleRepository;
 import com.lamb.springaiknowledgeserver.repository.UserRepository;
+import java.util.EnumSet;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class DataInitializer implements ApplicationRunner {
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.admin.username}")
@@ -26,13 +30,32 @@ public class DataInitializer implements ApplicationRunner {
 
     @Override
     public void run(@NonNull ApplicationArguments args) {
-        if (userRepository.existsByUsername(adminUsername)) {
-            return;
+        Role adminRole = ensureRole(
+            "ADMIN",
+            EnumSet.of(Permission.USER_READ, Permission.USER_WRITE, Permission.ROLE_READ, Permission.ROLE_WRITE)
+        );
+        ensureRole("USER", EnumSet.noneOf(Permission.class));
+
+        User admin = userRepository.findByUsername(adminUsername).orElse(null);
+        if (admin == null) {
+            admin = new User();
+            admin.setUsername(adminUsername);
+            admin.setPasswordHash(passwordEncoder.encode(adminPassword));
+            admin.setRole(adminRole);
+            userRepository.save(admin);
+        } else if (admin.getRole() == null) {
+            admin.setRole(adminRole);
+            userRepository.save(admin);
         }
-        User admin = new User();
-        admin.setUsername(adminUsername);
-        admin.setPasswordHash(passwordEncoder.encode(adminPassword));
-        admin.setRole(UserRole.ADMIN);
-        userRepository.save(admin);
+    }
+
+    private Role ensureRole(String name, EnumSet<Permission> permissions) {
+        return roleRepository.findByName(name)
+            .orElseGet(() -> {
+                Role role = new Role();
+                role.setName(name);
+                role.setPermissions(permissions);
+                return roleRepository.save(role);
+            });
     }
 }

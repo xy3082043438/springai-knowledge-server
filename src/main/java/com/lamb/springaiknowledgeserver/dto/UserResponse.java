@@ -1,7 +1,6 @@
 package com.lamb.springaiknowledgeserver.dto;
 
 import com.lamb.springaiknowledgeserver.entity.User;
-import com.lamb.springaiknowledgeserver.entity.UserRole;
 import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,7 +11,7 @@ public class UserResponse {
 
     private Long id;
     private String username;
-    private UserRole role;
+    private String role;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -20,7 +19,7 @@ public class UserResponse {
         return new UserResponse(
             user.getId(),
             user.getUsername(),
-            user.getRole(),
+            user.getRole().getName(),
             user.getCreatedAt(),
             user.getUpdatedAt()
         );

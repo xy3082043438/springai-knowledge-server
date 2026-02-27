@@ -42,7 +42,7 @@ public class UserController {
         return UserResponse.from(user);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_READ')")
     @GetMapping
     public List<UserResponse> list() {
         return userService.listUsers().stream()
@@ -50,13 +50,13 @@ public class UserController {
             .toList();
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_WRITE')")
     @PostMapping
     public UserResponse create(@Valid @RequestBody UserCreateRequest request) {
         return UserResponse.from(userService.createUser(request));
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('USER_WRITE')")
     @PatchMapping("/{id}")
     public UserResponse update(
         @PathVariable Long id,
