@@ -50,3 +50,6 @@ app:
     storage-path: ./data/documents
     chunk-size: 1000
     chunk-overlap: 200
+  rag:
+    top-k: 6
+    similarity-threshold: 0.2
