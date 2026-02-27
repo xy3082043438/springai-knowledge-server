@@ -51,5 +51,15 @@ app:
     chunk-size: 1000
     chunk-overlap: 200
   rag:
+    answer-style: 简洁、准确、专业
+    max-answer-chars: 300
+    max-output-tokens: 512
+    temperature: 0.2
+    top-p: 0.9
+  hybrid:
     top-k: 6
-    similarity-threshold: 0.2
+    vector-top-k: 6
+    vector-similarity-threshold: 0.2
+    keyword-top-k: 6
+    vector-weight: 0.7
+    keyword-weight: 0.3
