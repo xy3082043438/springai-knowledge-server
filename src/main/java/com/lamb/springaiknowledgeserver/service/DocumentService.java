@@ -1,5 +1,6 @@
 package com.lamb.springaiknowledgeserver.service;
 
+import com.lamb.springaiknowledgeserver.dto.DocumentChunkPreviewResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
 import com.lamb.springaiknowledgeserver.dto.DocumentUpdateRequest;
 import com.lamb.springaiknowledgeserver.entity.Document;
@@ -158,10 +159,24 @@ public class DocumentService {
     public Document getVisibleById(Long id, String roleName) {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
-        if (!hasRoleAccess(document, roleName)) {
+        if (hasRoleAccess(document, roleName)) {
+            return document;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentChunkPreviewResponse getChunkPreview(Long chunkId, String roleName) {
+        DocumentChunk chunk = documentChunkRepository.findById(chunkId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chunk not found"));
+        Document document = chunk.getDocument();
+        if (document == null) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
         }
-        return document;
+        if (hasRoleAccess(document, roleName)) {
+            return DocumentChunkPreviewResponse.from(chunk);
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
     }
 
     private void rebuildChunks(Document document, List<PageText> pages) {
@@ -189,9 +204,6 @@ public class DocumentService {
             overlap = size - 1;
         }
         int step = size - overlap;
-        if (step <= 0) {
-            step = size;
-        }
 
         List<DocumentChunk> result = new ArrayList<>();
         int index = 0;
@@ -220,9 +232,6 @@ public class DocumentService {
             overlap = size - 1;
         }
         int step = size - overlap;
-        if (step <= 0) {
-            step = size;
-        }
 
         List<DocumentChunk> result = new ArrayList<>();
         int index = 0;

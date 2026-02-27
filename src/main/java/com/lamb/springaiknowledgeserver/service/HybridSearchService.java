@@ -102,6 +102,8 @@ public class HybridSearchService {
                 doc.getText(),
                 extractInt(metadata.get("pageNumber"), 1),
                 extractInt(metadata.get("chunkIndex"), 0),
+                extractInt(metadata.get("startOffset"), 0),
+                extractInt(metadata.get("endOffset"), 0),
                 Objects.toString(metadata.get("title"), null),
                 Objects.toString(metadata.get("fileName"), null),
                 Objects.toString(metadata.get("contentType"), null),
@@ -135,6 +137,8 @@ public class HybridSearchService {
                 row.getContent(),
                 row.getPageNumber() == null ? 1 : row.getPageNumber(),
                 row.getChunkIndex() == null ? 0 : row.getChunkIndex(),
+                row.getStartOffset() == null ? 0 : row.getStartOffset(),
+                row.getEndOffset() == null ? 0 : row.getEndOffset(),
                 row.getTitle(),
                 row.getFileName(),
                 row.getContentType(),
@@ -185,6 +189,8 @@ public class HybridSearchService {
         String content,
         int pageNumber,
         int chunkIndex,
+        int startOffset,
+        int endOffset,
         String title,
         String fileName,
         String contentType,
@@ -199,6 +205,8 @@ public class HybridSearchService {
         private final String content;
         private final int pageNumber;
         private final int chunkIndex;
+        private final int startOffset;
+        private final int endOffset;
         private final String title;
         private final String fileName;
         private final String contentType;
@@ -211,6 +219,8 @@ public class HybridSearchService {
             String content,
             int pageNumber,
             int chunkIndex,
+            int startOffset,
+            int endOffset,
             String title,
             String fileName,
             String contentType,
@@ -221,6 +231,8 @@ public class HybridSearchService {
             this.content = content;
             this.pageNumber = pageNumber;
             this.chunkIndex = chunkIndex;
+            this.startOffset = startOffset;
+            this.endOffset = endOffset;
             this.title = title;
             this.fileName = fileName;
             this.contentType = contentType;
@@ -235,6 +247,8 @@ public class HybridSearchService {
         private final String content;
         private final int pageNumber;
         private final int chunkIndex;
+        private final int startOffset;
+        private final int endOffset;
         private final String title;
         private final String fileName;
         private final String contentType;
@@ -247,6 +261,8 @@ public class HybridSearchService {
             String content,
             int pageNumber,
             int chunkIndex,
+            int startOffset,
+            int endOffset,
             String title,
             String fileName,
             String contentType,
@@ -257,6 +273,8 @@ public class HybridSearchService {
             this.content = content;
             this.pageNumber = pageNumber;
             this.chunkIndex = chunkIndex;
+            this.startOffset = startOffset;
+            this.endOffset = endOffset;
             this.title = title;
             this.fileName = fileName;
             this.contentType = contentType;
@@ -271,6 +289,8 @@ public class HybridSearchService {
         private String content;
         private int pageNumber;
         private int chunkIndex;
+        private int startOffset;
+        private int endOffset;
         private String title;
         private String fileName;
         private String contentType;
@@ -284,6 +304,8 @@ public class HybridSearchService {
             this.content = hit.content;
             this.pageNumber = hit.pageNumber;
             this.chunkIndex = hit.chunkIndex;
+            this.startOffset = hit.startOffset;
+            this.endOffset = hit.endOffset;
             this.title = firstNonNull(this.title, hit.title);
             this.fileName = firstNonNull(this.fileName, hit.fileName);
             this.contentType = firstNonNull(this.contentType, hit.contentType);
@@ -298,6 +320,8 @@ public class HybridSearchService {
             }
             this.pageNumber = hit.pageNumber;
             this.chunkIndex = hit.chunkIndex;
+            this.startOffset = hit.startOffset;
+            this.endOffset = hit.endOffset;
             this.title = firstNonNull(this.title, hit.title);
             this.fileName = firstNonNull(this.fileName, hit.fileName);
             this.contentType = firstNonNull(this.contentType, hit.contentType);
@@ -315,6 +339,8 @@ public class HybridSearchService {
                 content,
                 pageNumber,
                 chunkIndex,
+                startOffset,
+                endOffset,
                 title,
                 fileName,
                 contentType,

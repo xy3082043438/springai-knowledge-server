@@ -115,6 +115,8 @@ public class RerankService {
             origin.content(),
             origin.pageNumber(),
             origin.chunkIndex(),
+            origin.startOffset(),
+            origin.endOffset(),
             origin.title(),
             origin.fileName(),
             origin.contentType(),

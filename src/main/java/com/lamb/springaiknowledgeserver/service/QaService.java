@@ -2,6 +2,7 @@ package com.lamb.springaiknowledgeserver.service;
 
 import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.QaResponse;
+import com.lamb.springaiknowledgeserver.dto.QaSourceResponse;
 import com.lamb.springaiknowledgeserver.entity.Document;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
@@ -46,7 +47,7 @@ public class QaService {
         List<HybridSearchService.HybridChunk> chunks = hybridSearchService.search(roleName, question);
         chunks = rerankService.rerank(question, chunks);
         if (chunks.isEmpty()) {
-            return new QaResponse(DEFAULT_NO_ANSWER, List.of());
+            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of());
         }
 
         String context = buildContext(chunks);
@@ -62,7 +63,8 @@ public class QaService {
         }
 
         List<DocumentResponse> documents = resolveDocuments(chunks, roleName);
-        return new QaResponse(answer, documents);
+        List<QaSourceResponse> sources = buildSources(chunks);
+        return new QaResponse(answer, documents, sources);
     }
 
     private String buildContext(List<HybridSearchService.HybridChunk> chunks) {
@@ -104,6 +106,25 @@ public class QaService {
             responses.add(DocumentResponse.from(document));
         }
         return responses;
+    }
+
+    private List<QaSourceResponse> buildSources(List<HybridSearchService.HybridChunk> chunks) {
+        List<QaSourceResponse> sources = new ArrayList<>();
+        for (HybridSearchService.HybridChunk chunk : chunks) {
+            sources.add(new QaSourceResponse(
+                chunk.chunkId(),
+                chunk.documentId(),
+                chunk.title(),
+                chunk.fileName(),
+                chunk.pageNumber(),
+                chunk.chunkIndex(),
+                chunk.startOffset(),
+                chunk.endOffset(),
+                chunk.combinedScore(),
+                chunk.content()
+            ));
+        }
+        return sources;
     }
 
     private Document findDocument(List<Document> documents, Long id) {

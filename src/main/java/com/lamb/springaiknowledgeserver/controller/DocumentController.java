@@ -1,6 +1,7 @@
 package com.lamb.springaiknowledgeserver.controller;
 
 import com.lamb.springaiknowledgeserver.auth.UserPrincipal;
+import com.lamb.springaiknowledgeserver.dto.DocumentChunkPreviewResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
 import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentSearchRequest;
@@ -53,6 +54,16 @@ public class DocumentController {
     public DocumentResponse get(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id) {
         String roleName = resolveRoleName(principal);
         return DocumentResponse.from(documentService.getVisibleById(id, roleName));
+    }
+
+    @PreAuthorize("hasAuthority('DOC_READ')")
+    @GetMapping("/chunks/{chunkId}")
+    public DocumentChunkPreviewResponse previewChunk(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long chunkId
+    ) {
+        String roleName = resolveRoleName(principal);
+        return documentService.getChunkPreview(chunkId, roleName);
     }
 
     @PreAuthorize("hasAuthority('DOC_READ')")

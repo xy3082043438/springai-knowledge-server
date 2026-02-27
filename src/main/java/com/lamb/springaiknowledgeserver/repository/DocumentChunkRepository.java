@@ -16,6 +16,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
                c.content as content,
                c.page_number as pageNumber,
                c.chunk_index as chunkIndex,
+               c.start_offset as startOffset,
+               c.end_offset as endOffset,
                d.id as documentId,
                d.title as title,
                d.file_name as fileName,

@@ -6,6 +6,8 @@ public interface KeywordChunkRow {
     String getContent();
     Integer getPageNumber();
     Integer getChunkIndex();
+    Integer getStartOffset();
+    Integer getEndOffset();
     String getTitle();
     String getFileName();
     String getContentType();
