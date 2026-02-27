@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: springai-knowledge-server
+
+  datasource:
+      url: jdbc:postgresql://localhost:5432/springai_knowledge
+      username: postgres
+      password: ${PG_PASSWORD}
+  ai:
+    openai:
+      base-url: https://api.siliconflow.cn
+      api-key: ${SILICONFLOW_API_KEY}
+      chat:
+        options:
+          model: Pro/moonshotai/Kimi-K2.5
+      embedding:
+        options:
+          model: BAAI/bge-large-zh-v1.5
