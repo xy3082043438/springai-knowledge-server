@@ -42,3 +42,5 @@ app:
     password: admin123
   document:
     storage-path: ./data/documents
+    chunk-size: 1000
+    chunk-overlap: 200

@@ -3,8 +3,10 @@ package com.lamb.springaiknowledgeserver.service;
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
 import com.lamb.springaiknowledgeserver.dto.DocumentUpdateRequest;
 import com.lamb.springaiknowledgeserver.entity.Document;
+import com.lamb.springaiknowledgeserver.entity.DocumentChunk;
 import com.lamb.springaiknowledgeserver.entity.DocumentStatus;
 import com.lamb.springaiknowledgeserver.entity.Role;
+import com.lamb.springaiknowledgeserver.repository.DocumentChunkRepository;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
 import com.lamb.springaiknowledgeserver.repository.RoleRepository;
 import java.io.IOException;
@@ -12,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -24,6 +27,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -32,11 +36,19 @@ import org.springframework.web.server.ResponseStatusException;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final DocumentChunkRepository documentChunkRepository;
     private final RoleRepository roleRepository;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
 
+    @Value("${app.document.chunk-size}")
+    private int chunkSize;
+
+    @Value("${app.document.chunk-overlap}")
+    private int chunkOverlap;
+
+    @Transactional
     public Document createText(DocumentCreateRequest request) {
         Set<Role> roles = resolveRoles(request.getAllowedRoles());
         Document document = new Document();
@@ -47,9 +59,12 @@ public class DocumentService {
         document.setFileSize(request.getContent() == null ? 0 : request.getContent().getBytes(StandardCharsets.UTF_8).length);
         document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(roles);
-        return documentRepository.save(document);
+        Document saved = documentRepository.save(document);
+        rebuildChunks(saved);
+        return saved;
     }
 
+    @Transactional
     public Document upload(MultipartFile file, String title, Collection<String> roleNames) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
@@ -76,12 +91,16 @@ public class DocumentService {
         document.setStoragePath(target.toString());
         document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(resolveRoles(roleNames));
-        return documentRepository.save(document);
+        Document saved = documentRepository.save(document);
+        rebuildChunks(saved);
+        return saved;
     }
 
+    @Transactional
     public Document update(Long id, DocumentUpdateRequest request) {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+        boolean contentChanged = false;
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
             document.setTitle(request.getTitle());
         }
@@ -89,6 +108,7 @@ public class DocumentService {
             document.setContent(request.getContent());
             document.setContentType("text/plain");
             document.setFileSize(request.getContent().getBytes(StandardCharsets.UTF_8).length);
+            contentChanged = true;
         }
         if (request.getAllowedRoles() != null) {
             document.setAllowedRoles(resolveRoles(request.getAllowedRoles()));
@@ -96,13 +116,19 @@ public class DocumentService {
         if (request.getStatus() != null) {
             document.setStatus(request.getStatus());
         }
-        return documentRepository.save(document);
+        Document saved = documentRepository.save(document);
+        if (contentChanged) {
+            rebuildChunks(saved);
+        }
+        return saved;
     }
 
+    @Transactional
     public void delete(Long id) {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
         deleteFileIfExists(document.getStoragePath());
+        documentChunkRepository.deleteByDocumentId(id);
         documentRepository.delete(document);
     }
 
@@ -121,6 +147,48 @@ public class DocumentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
         }
         return document;
+    }
+
+    private void rebuildChunks(Document document) {
+        documentChunkRepository.deleteByDocumentId(document.getId());
+        List<DocumentChunk> chunks = splitToChunks(document);
+        if (!chunks.isEmpty()) {
+            documentChunkRepository.saveAll(chunks);
+        }
+    }
+
+    private List<DocumentChunk> splitToChunks(Document document) {
+        String content = document.getContent();
+        if (content == null || content.isBlank()) {
+            return List.of();
+        }
+        int size = Math.max(1, chunkSize);
+        int overlap = Math.max(0, chunkOverlap);
+        if (overlap >= size) {
+            overlap = size - 1;
+        }
+        int step = size - overlap;
+        if (step <= 0) {
+            step = size;
+        }
+
+        List<DocumentChunk> result = new ArrayList<>();
+        int index = 0;
+        for (int start = 0; start < content.length(); start += step) {
+            int end = Math.min(content.length(), start + size);
+            String slice = content.substring(start, end);
+            DocumentChunk chunk = new DocumentChunk();
+            chunk.setDocument(document);
+            chunk.setChunkIndex(index++);
+            chunk.setContent(slice);
+            chunk.setStartOffset(start);
+            chunk.setEndOffset(end);
+            result.add(chunk);
+            if (end == content.length()) {
+                break;
+            }
+        }
+        return result;
     }
 
     private Path storeFile(MultipartFile file, String safeName) {

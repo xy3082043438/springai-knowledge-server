@@ -45,7 +45,7 @@ public class Document {
     private String contentType;
 
     @Column(nullable = false)
-    private long fileSize = 0;
+    private long fileSize;
 
     @Column(length = 500)
     private String storagePath;
