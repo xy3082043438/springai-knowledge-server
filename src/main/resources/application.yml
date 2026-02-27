@@ -26,6 +26,11 @@ spring:
         options:
           model: BAAI/bge-large-zh-v1.5
 
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
 security:
   jwt:
     secret: change-me-please-change-me-32-bytes
@@ -35,3 +40,5 @@ app:
   admin:
     username: admin
     password: admin123
+  document:
+    storage-path: ./data/documents

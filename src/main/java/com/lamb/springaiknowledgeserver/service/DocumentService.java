@@ -1,17 +1,30 @@
 package com.lamb.springaiknowledgeserver.service;
 
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
+import com.lamb.springaiknowledgeserver.dto.DocumentUpdateRequest;
 import com.lamb.springaiknowledgeserver.entity.Document;
+import com.lamb.springaiknowledgeserver.entity.DocumentStatus;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
 import com.lamb.springaiknowledgeserver.repository.RoleRepository;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -21,13 +34,76 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final RoleRepository roleRepository;
 
-    public Document create(DocumentCreateRequest request) {
+    @Value("${app.document.storage-path}")
+    private String storagePath;
+
+    public Document createText(DocumentCreateRequest request) {
         Set<Role> roles = resolveRoles(request.getAllowedRoles());
         Document document = new Document();
         document.setTitle(request.getTitle());
         document.setContent(request.getContent());
+        document.setFileName(request.getTitle());
+        document.setContentType("text/plain");
+        document.setFileSize(request.getContent() == null ? 0 : request.getContent().getBytes(StandardCharsets.UTF_8).length);
+        document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(roles);
         return documentRepository.save(document);
+    }
+
+    public Document upload(MultipartFile file, String title, Collection<String> roleNames) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
+        }
+        String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+        String safeName = originalName.replaceAll("[\\\\/]+", "_");
+        String contentType = file.getContentType();
+        String extension = getExtension(safeName);
+        boolean isPdf = isPdf(contentType, extension);
+        boolean isText = isText(contentType, extension);
+        if (!isPdf && !isText) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PDF or TXT is supported");
+        }
+
+        String extracted = isPdf ? extractPdfText(file) : extractText(file);
+        Path target = storeFile(file, safeName);
+
+        Document document = new Document();
+        document.setTitle((title == null || title.isBlank()) ? safeName : title);
+        document.setContent(extracted);
+        document.setFileName(safeName);
+        document.setContentType(contentType != null ? contentType : (isPdf ? "application/pdf" : "text/plain"));
+        document.setFileSize(file.getSize());
+        document.setStoragePath(target.toString());
+        document.setStatus(DocumentStatus.READY);
+        document.setAllowedRoles(resolveRoles(roleNames));
+        return documentRepository.save(document);
+    }
+
+    public Document update(Long id, DocumentUpdateRequest request) {
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            document.setTitle(request.getTitle());
+        }
+        if (request.getContent() != null) {
+            document.setContent(request.getContent());
+            document.setContentType("text/plain");
+            document.setFileSize(request.getContent().getBytes(StandardCharsets.UTF_8).length);
+        }
+        if (request.getAllowedRoles() != null) {
+            document.setAllowedRoles(resolveRoles(request.getAllowedRoles()));
+        }
+        if (request.getStatus() != null) {
+            document.setStatus(request.getStatus());
+        }
+        return documentRepository.save(document);
+    }
+
+    public void delete(Long id) {
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+        deleteFileIfExists(document.getStoragePath());
+        documentRepository.delete(document);
     }
 
     public List<Document> listVisible(String roleName) {
@@ -45,6 +121,66 @@ public class DocumentService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
         }
         return document;
+    }
+
+    private Path storeFile(MultipartFile file, String safeName) {
+        try {
+            Path dir = Paths.get(storagePath).toAbsolutePath().normalize();
+            Files.createDirectories(dir);
+            String fileName = UUID.randomUUID() + "-" + safeName;
+            Path target = dir.resolve(fileName);
+            file.transferTo(target);
+            return target;
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file", ex);
+        }
+    }
+
+    private void deleteFileIfExists(String path) {
+        if (path == null || path.isBlank()) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Paths.get(path));
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete file", ex);
+        }
+    }
+
+    private String extractText(MultipartFile file) {
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read text file", ex);
+        }
+    }
+
+    private String extractPdfText(MultipartFile file) {
+        try {
+            byte[] bytes = file.getBytes();
+            try (PDDocument doc = Loader.loadPDF(bytes)) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                return stripper.getText(doc);
+            }
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read PDF", ex);
+        }
+    }
+
+    private boolean isPdf(String contentType, String extension) {
+        return "pdf".equalsIgnoreCase(extension) || (contentType != null && contentType.contains("pdf"));
+    }
+
+    private boolean isText(String contentType, String extension) {
+        return "txt".equalsIgnoreCase(extension) || (contentType != null && contentType.startsWith("text/"));
+    }
+
+    private String getExtension(String fileName) {
+        int idx = fileName.lastIndexOf('.');
+        if (idx == -1 || idx == fileName.length() - 1) {
+            return "";
+        }
+        return fileName.substring(idx + 1);
     }
 
     private Set<Role> resolveRoles(Collection<String> roleNames) {

@@ -2,6 +2,8 @@ package com.lamb.springaiknowledgeserver.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,6 +37,22 @@ public class Document {
 
     @Column(nullable = false, columnDefinition = "text")
     private String content;
+
+    @Column
+    private String fileName;
+
+    @Column(length = 100)
+    private String contentType;
+
+    @Column(nullable = false)
+    private long fileSize = 0;
+
+    @Column(length = 500)
+    private String storagePath;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DocumentStatus status = DocumentStatus.READY;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

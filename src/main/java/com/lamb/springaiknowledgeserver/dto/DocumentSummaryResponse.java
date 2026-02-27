@@ -11,11 +11,10 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public class DocumentResponse {
+public class DocumentSummaryResponse {
 
     private Long id;
     private String title;
-    private String content;
     private String fileName;
     private String contentType;
     private long fileSize;
@@ -24,11 +23,10 @@ public class DocumentResponse {
     private Instant createdAt;
     private Instant updatedAt;
 
-    public static DocumentResponse from(Document document) {
-        return new DocumentResponse(
+    public static DocumentSummaryResponse from(Document document) {
+        return new DocumentSummaryResponse(
             document.getId(),
             document.getTitle(),
-            document.getContent(),
             document.getFileName(),
             document.getContentType(),
             document.getFileSize(),
