@@ -4,5 +4,7 @@ public enum Permission {
     USER_READ,
     USER_WRITE,
     ROLE_READ,
-    ROLE_WRITE
+    ROLE_WRITE,
+    DOC_READ,
+    DOC_WRITE
 }

@@ -32,9 +32,16 @@ public class DataInitializer implements ApplicationRunner {
     public void run(@NonNull ApplicationArguments args) {
         Role adminRole = ensureRole(
             "ADMIN",
-            EnumSet.of(Permission.USER_READ, Permission.USER_WRITE, Permission.ROLE_READ, Permission.ROLE_WRITE)
+            EnumSet.of(
+                Permission.USER_READ,
+                Permission.USER_WRITE,
+                Permission.ROLE_READ,
+                Permission.ROLE_WRITE,
+                Permission.DOC_READ,
+                Permission.DOC_WRITE
+            )
         );
-        ensureRole("USER", EnumSet.noneOf(Permission.class));
+        ensureRole("USER", EnumSet.of(Permission.DOC_READ));
 
         User admin = userRepository.findByUsername(adminUsername).orElse(null);
         if (admin == null) {

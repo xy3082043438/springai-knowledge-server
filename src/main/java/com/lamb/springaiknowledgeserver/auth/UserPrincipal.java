@@ -81,8 +81,10 @@ public class UserPrincipal implements UserDetails {
         }
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + role.getName()));
-        for (Permission permission : role.getPermissions()) {
-            authorities.add(new SimpleGrantedAuthority(permission.name()));
+        if (role.getPermissions() != null) {
+            for (Permission permission : role.getPermissions()) {
+                authorities.add(new SimpleGrantedAuthority(permission.name()));
+            }
         }
         return Collections.unmodifiableList(authorities);
     }
