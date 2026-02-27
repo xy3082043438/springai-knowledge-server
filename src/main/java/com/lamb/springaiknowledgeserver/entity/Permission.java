@@ -6,5 +6,7 @@ public enum Permission {
     ROLE_READ,
     ROLE_WRITE,
     DOC_READ,
-    DOC_WRITE
+    DOC_WRITE,
+    CONFIG_READ,
+    CONFIG_WRITE
 }

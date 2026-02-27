@@ -21,6 +21,7 @@ public class HybridSearchService {
 
     private final VectorStore vectorStore;
     private final DocumentChunkRepository documentChunkRepository;
+    private final SystemConfigService systemConfigService;
 
     @Value("${app.hybrid.vector-top-k:6}")
     private int vectorTopK;
@@ -54,9 +55,11 @@ public class HybridSearchService {
             builder.applyKeyword(hit);
         }
 
-        double totalWeight = Math.max(0, vectorWeight) + Math.max(0, keywordWeight);
-        double vWeight = totalWeight > 0 ? Math.max(0, vectorWeight) / totalWeight : 0.5;
-        double kWeight = totalWeight > 0 ? Math.max(0, keywordWeight) / totalWeight : 0.5;
+        double resolvedVectorWeight = resolveVectorWeight();
+        double resolvedKeywordWeight = resolveKeywordWeight();
+        double totalWeight = Math.max(0, resolvedVectorWeight) + Math.max(0, resolvedKeywordWeight);
+        double vWeight = totalWeight > 0 ? Math.max(0, resolvedVectorWeight) / totalWeight : 0.5;
+        double kWeight = totalWeight > 0 ? Math.max(0, resolvedKeywordWeight) / totalWeight : 0.5;
 
         List<HybridChunk> results = new ArrayList<>();
         for (HybridChunkBuilder builder : merged.values()) {
@@ -64,15 +67,20 @@ public class HybridSearchService {
             results.add(builder.build());
         }
         results.sort(Comparator.comparingDouble(HybridChunk::combinedScore).reversed());
-        int limit = fusedTopK <= 0 ? results.size() : Math.min(fusedTopK, results.size());
+        int resolvedTopK = resolveHybridTopK();
+        int limit = resolvedTopK <= 0 ? results.size() : Math.min(resolvedTopK, results.size());
         return results.subList(0, limit);
     }
 
     private List<VectorHit> vectorSearch(String roleName, String query) {
-        int topK = vectorTopK <= 0 ? SearchRequest.DEFAULT_TOP_K : vectorTopK;
-        double threshold = vectorSimilarityThreshold <= 0
-            ? SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL
-            : vectorSimilarityThreshold;
+        int topK = resolveVectorTopK();
+        double threshold = resolveVectorThreshold();
+        if (topK <= 0) {
+            topK = SearchRequest.DEFAULT_TOP_K;
+        }
+        if (threshold <= 0) {
+            threshold = SearchRequest.SIMILARITY_THRESHOLD_ACCEPT_ALL;
+        }
         FilterExpressionBuilder filterBuilder = new FilterExpressionBuilder();
         SearchRequest request = SearchRequest.builder()
             .query(query)
@@ -121,7 +129,7 @@ public class HybridSearchService {
     }
 
     private List<KeywordHit> keywordSearch(String roleName, String query) {
-        int limit = Math.max(1, keywordTopK);
+        int limit = Math.max(1, resolveKeywordTopK());
         List<KeywordChunkRow> rows = documentChunkRepository.searchChunksByKeyword(List.of(roleName), query, limit);
         if (rows.isEmpty()) {
             return List.of();
@@ -181,6 +189,30 @@ public class HybridSearchService {
         } catch (NumberFormatException ex) {
             return fallback;
         }
+    }
+
+    private int resolveVectorTopK() {
+        return systemConfigService.getInt("hybrid.vectorTopK", vectorTopK);
+    }
+
+    private double resolveVectorThreshold() {
+        return systemConfigService.getDouble("hybrid.vectorSimilarityThreshold", vectorSimilarityThreshold);
+    }
+
+    private int resolveKeywordTopK() {
+        return systemConfigService.getInt("hybrid.keywordTopK", keywordTopK);
+    }
+
+    private double resolveVectorWeight() {
+        return systemConfigService.getDouble("hybrid.vectorWeight", vectorWeight);
+    }
+
+    private double resolveKeywordWeight() {
+        return systemConfigService.getDouble("hybrid.keywordWeight", keywordWeight);
+    }
+
+    private int resolveHybridTopK() {
+        return systemConfigService.getInt("hybrid.topK", fusedTopK);
     }
 
     public record HybridChunk(

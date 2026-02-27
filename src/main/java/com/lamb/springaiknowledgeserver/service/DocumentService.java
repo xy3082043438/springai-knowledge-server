@@ -43,6 +43,7 @@ public class DocumentService {
     private final DocumentChunkRepository documentChunkRepository;
     private final RoleRepository roleRepository;
     private final VectorStore vectorStore;
+    private final SystemConfigService systemConfigService;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -198,8 +199,8 @@ public class DocumentService {
         if (content == null || content.isBlank()) {
             return List.of();
         }
-        int size = Math.max(1, chunkSize);
-        int overlap = Math.max(0, chunkOverlap);
+        int size = Math.max(1, resolveChunkSize());
+        int overlap = Math.max(0, resolveChunkOverlap());
         if (overlap >= size) {
             overlap = size - 1;
         }
@@ -226,8 +227,8 @@ public class DocumentService {
     }
 
     private List<DocumentChunk> splitToChunks(Document document, List<PageText> pages) {
-        int size = Math.max(1, chunkSize);
-        int overlap = Math.max(0, chunkOverlap);
+        int size = Math.max(1, resolveChunkSize());
+        int overlap = Math.max(0, resolveChunkOverlap());
         if (overlap >= size) {
             overlap = size - 1;
         }
@@ -441,5 +442,13 @@ public class DocumentService {
             }
         }
         return false;
+    }
+
+    private int resolveChunkSize() {
+        return systemConfigService.getInt("chunk.size", chunkSize);
+    }
+
+    private int resolveChunkOverlap() {
+        return systemConfigService.getInt("chunk.overlap", chunkOverlap);
     }
 }

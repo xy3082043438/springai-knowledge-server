@@ -38,7 +38,9 @@ public class DataInitializer implements ApplicationRunner {
                 Permission.ROLE_READ,
                 Permission.ROLE_WRITE,
                 Permission.DOC_READ,
-                Permission.DOC_WRITE
+                Permission.DOC_WRITE,
+                Permission.CONFIG_READ,
+                Permission.CONFIG_WRITE
             )
         );
         ensureRole("USER", EnumSet.of(Permission.DOC_READ));

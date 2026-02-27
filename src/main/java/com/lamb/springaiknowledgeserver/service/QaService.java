@@ -3,6 +3,7 @@ package com.lamb.springaiknowledgeserver.service;
 import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.QaResponse;
 import com.lamb.springaiknowledgeserver.dto.QaSourceResponse;
+import com.lamb.springaiknowledgeserver.config.PromptTemplates;
 import com.lamb.springaiknowledgeserver.entity.Document;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
@@ -27,6 +28,7 @@ public class QaService {
     private final ChatClient chatClient;
     private final HybridSearchService hybridSearchService;
     private final RerankService rerankService;
+    private final SystemConfigService systemConfigService;
 
     @Value("${app.rag.answer-style:简洁、准确、专业}")
     private String answerStyle;
@@ -146,40 +148,67 @@ public class QaService {
     }
 
     private String systemPrompt() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("你是企业知识库问答助手。请严格基于提供的“上下文”回答问题。\n");
-        builder.append("如果上下文没有相关信息，请直接回答“未在知识库中找到相关信息。”不要编造答案。\n");
-        builder.append("回答要面向企业内部场景。\n");
-        if (answerStyle != null && !answerStyle.isBlank()) {
-            builder.append("回答风格：").append(answerStyle).append("。\n");
-        }
-        if (maxAnswerChars > 0) {
-            builder.append("回答字数不超过 ").append(maxAnswerChars).append(" 字。\n");
-        }
-        return builder.toString().trim();
+        String template = systemConfigService.getString("rag.prompt.system", PromptTemplates.SYSTEM_TEMPLATE);
+        String style = resolveAnswerStyle();
+        int maxChars = resolveMaxAnswerChars();
+        String prompt = template
+            .replace("{answerStyle}", style == null ? "" : style)
+            .replace("{maxAnswerChars}", maxChars > 0 ? String.valueOf(maxChars) : "");
+        return cleanupPrompt(prompt);
     }
 
     private String userPrompt(String question, String context) {
-        return """
-            问题:
-            %s
-
-            上下文:
-            %s
-            """.formatted(question, context);
+        String template = systemConfigService.getString("rag.prompt.user", PromptTemplates.USER_TEMPLATE);
+        return cleanupPrompt(template
+            .replace("{question}", question == null ? "" : question)
+            .replace("{context}", context == null ? "" : context));
     }
 
     private OpenAiChatOptions buildChatOptions() {
         OpenAiChatOptions.Builder builder = OpenAiChatOptions.builder();
-        if (maxOutputTokens > 0) {
-            builder.maxTokens(maxOutputTokens);
+        int maxTokens = resolveMaxOutputTokens();
+        if (maxTokens > 0) {
+            builder.maxTokens(maxTokens);
         }
-        if (temperature >= 0) {
-            builder.temperature(temperature);
+        double resolvedTemperature = resolveTemperature();
+        if (resolvedTemperature >= 0) {
+            builder.temperature(resolvedTemperature);
         }
-        if (topP > 0 && topP <= 1) {
-            builder.topP(topP);
+        double resolvedTopP = resolveTopP();
+        if (resolvedTopP > 0 && resolvedTopP <= 1) {
+            builder.topP(resolvedTopP);
         }
         return builder.build();
+    }
+
+    private String resolveAnswerStyle() {
+        return systemConfigService.getString("rag.answerStyle", answerStyle);
+    }
+
+    private int resolveMaxAnswerChars() {
+        return systemConfigService.getInt("rag.maxAnswerChars", maxAnswerChars);
+    }
+
+    private int resolveMaxOutputTokens() {
+        return systemConfigService.getInt("rag.maxOutputTokens", maxOutputTokens);
+    }
+
+    private double resolveTemperature() {
+        return systemConfigService.getDouble("rag.temperature", temperature);
+    }
+
+    private double resolveTopP() {
+        return systemConfigService.getDouble("rag.topP", topP);
+    }
+
+    private String cleanupPrompt(String prompt) {
+        if (prompt == null) {
+            return "";
+        }
+        String cleaned = prompt.replaceAll("[ \\t]+\\n", "\n").trim();
+        if (cleaned.contains("{maxAnswerChars}") || cleaned.contains("{answerStyle}")) {
+            cleaned = cleaned.replace("{maxAnswerChars}", "").replace("{answerStyle}", "").trim();
+        }
+        return cleaned;
     }
 }
