@@ -63,3 +63,9 @@ app:
     keyword-top-k: 6
     vector-weight: 0.7
     keyword-weight: 0.3
+  rerank:
+    enabled: true
+    base-url: https://api.siliconflow.cn/v1/rerank
+    model: BAAI/bge-reranker-v2-m3
+    top-n: 6
+    max-docs: 30

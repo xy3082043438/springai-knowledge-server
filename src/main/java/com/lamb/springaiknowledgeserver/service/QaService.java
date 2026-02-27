@@ -25,6 +25,7 @@ public class QaService {
     private final DocumentRepository documentRepository;
     private final ChatClient chatClient;
     private final HybridSearchService hybridSearchService;
+    private final RerankService rerankService;
 
     @Value("${app.rag.answer-style:简洁、准确、专业}")
     private String answerStyle;
@@ -43,6 +44,7 @@ public class QaService {
 
     public QaResponse answer(String roleName, String question) {
         List<HybridSearchService.HybridChunk> chunks = hybridSearchService.search(roleName, question);
+        chunks = rerankService.rerank(question, chunks);
         if (chunks.isEmpty()) {
             return new QaResponse(DEFAULT_NO_ANSWER, List.of());
         }
