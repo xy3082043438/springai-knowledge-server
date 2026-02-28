@@ -8,6 +8,7 @@ import com.lamb.springaiknowledgeserver.repository.UserRepository;
 import java.util.EnumSet;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.core.annotation.Order;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
+@Order(10)
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
@@ -40,10 +42,14 @@ public class DataInitializer implements ApplicationRunner {
                 Permission.DOC_READ,
                 Permission.DOC_WRITE,
                 Permission.CONFIG_READ,
-                Permission.CONFIG_WRITE
+                Permission.CONFIG_WRITE,
+                Permission.LOG_READ,
+                Permission.LOG_WRITE,
+                Permission.FEEDBACK_READ,
+                Permission.FEEDBACK_WRITE
             )
         );
-        ensureRole("USER", EnumSet.of(Permission.DOC_READ));
+        ensureRole("USER", EnumSet.of(Permission.DOC_READ, Permission.FEEDBACK_WRITE));
 
         User admin = userRepository.findByUsername(adminUsername).orElse(null);
         if (admin == null) {
@@ -59,12 +65,23 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private Role ensureRole(String name, EnumSet<Permission> permissions) {
-        return roleRepository.findByName(name)
-            .orElseGet(() -> {
-                Role role = new Role();
-                role.setName(name);
-                role.setPermissions(permissions);
-                return roleRepository.save(role);
-            });
+        Role role = roleRepository.findByName(name).orElse(null);
+        if (role == null) {
+            role = new Role();
+            role.setName(name);
+            role.setPermissions(permissions);
+            return roleRepository.save(role);
+        }
+        boolean needsUpdate = role.getPermissions() == null || !role.getPermissions().containsAll(permissions);
+        if (needsUpdate) {
+            EnumSet<Permission> merged = EnumSet.noneOf(Permission.class);
+            if (role.getPermissions() != null && !role.getPermissions().isEmpty()) {
+                merged.addAll(role.getPermissions());
+            }
+            merged.addAll(permissions);
+            role.setPermissions(merged);
+            return roleRepository.save(role);
+        }
+        return role;
     }
 }

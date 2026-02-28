@@ -4,31 +4,43 @@ import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.QaResponse;
 import com.lamb.springaiknowledgeserver.dto.QaSourceResponse;
 import com.lamb.springaiknowledgeserver.config.PromptTemplates;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lamb.springaiknowledgeserver.entity.Document;
+import com.lamb.springaiknowledgeserver.entity.QaLog;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
+import com.lamb.springaiknowledgeserver.repository.QaLogRepository;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
 public class QaService {
 
     private static final String DEFAULT_NO_ANSWER = "未在知识库中找到相关信息。";
+    private static final Logger log = LoggerFactory.getLogger(QaService.class);
 
     private final DocumentRepository documentRepository;
     private final ChatClient chatClient;
     private final HybridSearchService hybridSearchService;
     private final RerankService rerankService;
     private final SystemConfigService systemConfigService;
+    private final QaLogRepository qaLogRepository;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.rag.answer-style:简洁、准确、专业}")
     private String answerStyle;
@@ -45,28 +57,42 @@ public class QaService {
     @Value("${app.rag.top-p:0.9}")
     private double topP;
 
-    public QaResponse answer(String roleName, String question) {
-        List<HybridSearchService.HybridChunk> chunks = hybridSearchService.search(roleName, question);
-        chunks = rerankService.rerank(question, chunks);
+    public QaResponse answer(Long userId, String username, String roleName, String question) {
+        List<HybridSearchService.HybridChunk> chunks;
+        try {
+            chunks = hybridSearchService.search(roleName, question);
+            chunks = rerankService.rerank(question, chunks);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索失败", ex);
+        }
+        List<DocumentResponse> documents = List.of();
+        List<QaSourceResponse> sources = List.of();
         if (chunks.isEmpty()) {
-            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of());
+            Long qaLogId = logQa(userId, username, DEFAULT_NO_ANSWER, documents, roleName, question, sources);
+            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId);
         }
 
         String context = buildContext(chunks);
         OpenAiChatOptions options = buildChatOptions();
-        String answer = chatClient.prompt()
-            .options(options)
-            .system(systemPrompt())
-            .user(userPrompt(question, context))
-            .call()
-            .content();
+        String answer;
+        try {
+            answer = chatClient.prompt()
+                .options(options)
+                .system(systemPrompt())
+                .user(userPrompt(question, context))
+                .call()
+                .content();
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "模型调用失败", ex);
+        }
         if (answer == null || answer.isBlank()) {
             answer = DEFAULT_NO_ANSWER;
         }
 
-        List<DocumentResponse> documents = resolveDocuments(chunks, roleName);
-        List<QaSourceResponse> sources = buildSources(chunks);
-        return new QaResponse(answer, documents, sources);
+        documents = resolveDocuments(chunks, roleName);
+        sources = buildSources(chunks);
+        Long qaLogId = logQa(userId, username, answer, documents, roleName, question, sources);
+        return new QaResponse(answer, documents, sources, qaLogId);
     }
 
     private String buildContext(List<HybridSearchService.HybridChunk> chunks) {
@@ -210,5 +236,45 @@ public class QaService {
             cleaned = cleaned.replace("{maxAnswerChars}", "").replace("{answerStyle}", "").trim();
         }
         return cleaned;
+    }
+
+    private Long logQa(
+        Long userId,
+        String username,
+        String answer,
+        List<DocumentResponse> documents,
+        String roleName,
+        String question,
+        List<QaSourceResponse> sources
+    ) {
+        try {
+            QaLog log = new QaLog();
+            log.setUserId(userId);
+            log.setUsername(username);
+            log.setQuestion(question);
+            log.setAnswer(answer);
+            log.setRoleName(roleName);
+            int topKValue = sources.size();
+            log.setTopK(topKValue == 0 ? null : topKValue);
+            log.setRetrievalJson(buildRetrievalJson(documents, sources));
+            QaLog saved = qaLogRepository.save(log);
+            return saved.getId();
+        } catch (Exception ex) {
+            // Avoid impacting QA flow.
+            log.debug("Failed to save QA log", ex);
+        }
+        return null;
+    }
+
+    private String buildRetrievalJson(List<DocumentResponse> documents, List<QaSourceResponse> sources) {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("documents", documents);
+            payload.put("sources", sources);
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ex) {
+            log.debug("Failed to serialize retrieval payload", ex);
+            return null;
+        }
     }
 }

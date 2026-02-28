@@ -35,8 +35,8 @@ public class QaController {
         User user = userService.getById(principal.getId());
         Role role = user.getRole();
         if (role == null || role.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User has no role");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "用户未分配角色");
         }
-        return qaService.answer(role.getName(), request.getQuestion());
+        return qaService.answer(principal.getId(), principal.getUsername(), role.getName(), request.getQuestion());
     }
 }

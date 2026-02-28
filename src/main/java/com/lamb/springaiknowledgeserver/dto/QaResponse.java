@@ -11,4 +11,5 @@ public class QaResponse {
     private String answer;
     private List<DocumentResponse> documents;
     private List<QaSourceResponse> sources;
+    private Long qaLogId;
 }

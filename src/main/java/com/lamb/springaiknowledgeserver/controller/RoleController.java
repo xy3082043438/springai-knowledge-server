@@ -4,10 +4,15 @@ import com.lamb.springaiknowledgeserver.dto.RoleCreateRequest;
 import com.lamb.springaiknowledgeserver.dto.RoleResponse;
 import com.lamb.springaiknowledgeserver.dto.RoleUpdateRequest;
 import com.lamb.springaiknowledgeserver.service.RoleService;
+import com.lamb.springaiknowledgeserver.service.OperationLogService;
+import com.lamb.springaiknowledgeserver.util.RequestUtils;
+import com.lamb.springaiknowledgeserver.auth.UserPrincipal;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,33 +27,91 @@ import org.springframework.web.bind.annotation.RestController;
 public class RoleController {
 
     private final RoleService roleService;
+    private final OperationLogService operationLogService;
 
     @PreAuthorize("hasAuthority('ROLE_READ')")
     @GetMapping
-    public List<RoleResponse> list() {
-        return roleService.listRoles().stream()
+    public List<RoleResponse> list(
+        @AuthenticationPrincipal UserPrincipal principal,
+        HttpServletRequest httpRequest
+    ) {
+        List<RoleResponse> response = roleService.listRoles().stream()
             .map(RoleResponse::from)
             .toList();
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "ROLE_LIST",
+            "ROLE",
+            null,
+            "list",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     @PreAuthorize("hasAuthority('ROLE_READ')")
     @GetMapping("/{id}")
-    public RoleResponse get(@PathVariable Long id) {
-        return RoleResponse.from(roleService.getById(id));
+    public RoleResponse get(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
+        RoleResponse response = RoleResponse.from(roleService.getById(id));
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "ROLE_VIEW",
+            "ROLE",
+            String.valueOf(id),
+            "role=" + response.getName(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     @PreAuthorize("hasAuthority('ROLE_WRITE')")
     @PostMapping
-    public RoleResponse create(@Valid @RequestBody RoleCreateRequest request) {
-        return RoleResponse.from(roleService.create(request));
+    public RoleResponse create(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @Valid @RequestBody RoleCreateRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        RoleResponse response = RoleResponse.from(roleService.create(request));
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "ROLE_CREATE",
+            "ROLE",
+            String.valueOf(response.getId()),
+            "role=" + response.getName(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     @PreAuthorize("hasAuthority('ROLE_WRITE')")
     @PatchMapping("/{id}")
     public RoleResponse update(
+        @AuthenticationPrincipal UserPrincipal principal,
         @PathVariable Long id,
-        @Valid @RequestBody RoleUpdateRequest request
+        @Valid @RequestBody RoleUpdateRequest request,
+        HttpServletRequest httpRequest
     ) {
-        return RoleResponse.from(roleService.update(id, request));
+        RoleResponse response = RoleResponse.from(roleService.update(id, request));
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "ROLE_UPDATE",
+            "ROLE",
+            String.valueOf(response.getId()),
+            "role=" + response.getName(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 }

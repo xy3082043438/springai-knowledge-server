@@ -1,16 +1,19 @@
 package com.lamb.springaiknowledgeserver.bootstrap;
 
 import com.lamb.springaiknowledgeserver.config.PromptTemplates;
+import com.lamb.springaiknowledgeserver.config.SystemBoundaryText;
 import com.lamb.springaiknowledgeserver.entity.SystemConfig;
 import com.lamb.springaiknowledgeserver.repository.SystemConfigRepository;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.core.annotation.Order;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 @Component
+@Order(20)
 @RequiredArgsConstructor
 public class SystemConfigInitializer implements ApplicationRunner {
 
@@ -72,6 +75,7 @@ public class SystemConfigInitializer implements ApplicationRunner {
         ensureConfig("rag.topP", String.valueOf(defaultTopP), "生成 TopP");
         ensureConfig("rag.prompt.system", PromptTemplates.SYSTEM_TEMPLATE.trim(), "System Prompt 模板");
         ensureConfig("rag.prompt.user", PromptTemplates.USER_TEMPLATE.trim(), "User Prompt 模板");
+        ensureConfig("system.boundary", SystemBoundaryText.DEFAULT_BOUNDARY, "功能边界说明");
     }
 
     private void ensureConfig(String key, String value, String description) {

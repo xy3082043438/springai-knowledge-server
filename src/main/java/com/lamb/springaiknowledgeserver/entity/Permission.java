@@ -8,5 +8,9 @@ public enum Permission {
     DOC_READ,
     DOC_WRITE,
     CONFIG_READ,
-    CONFIG_WRITE
+    CONFIG_WRITE,
+    LOG_READ,
+    LOG_WRITE,
+    FEEDBACK_READ,
+    FEEDBACK_WRITE
 }

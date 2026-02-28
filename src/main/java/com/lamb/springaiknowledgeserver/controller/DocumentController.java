@@ -7,10 +7,14 @@ import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentSearchRequest;
 import com.lamb.springaiknowledgeserver.dto.DocumentSummaryResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentUpdateRequest;
+import com.lamb.springaiknowledgeserver.entity.Document;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.entity.User;
 import com.lamb.springaiknowledgeserver.service.DocumentService;
+import com.lamb.springaiknowledgeserver.service.OperationLogService;
 import com.lamb.springaiknowledgeserver.service.UserService;
+import com.lamb.springaiknowledgeserver.util.RequestUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,21 +43,51 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final UserService userService;
+    private final OperationLogService operationLogService;
 
     @PreAuthorize("hasAuthority('DOC_READ')")
     @GetMapping
-    public List<DocumentSummaryResponse> list(@AuthenticationPrincipal UserPrincipal principal) {
+    public List<DocumentSummaryResponse> list(
+        @AuthenticationPrincipal UserPrincipal principal,
+        HttpServletRequest httpRequest
+    ) {
         String roleName = resolveRoleName(principal);
-        return documentService.listVisible(roleName).stream()
+        List<DocumentSummaryResponse> response = documentService.listVisible(roleName).stream()
             .map(DocumentSummaryResponse::from)
             .toList();
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_LIST",
+            "DOCUMENT",
+            null,
+            "role=" + roleName,
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     @PreAuthorize("hasAuthority('DOC_READ')")
     @GetMapping("/{id}")
-    public DocumentResponse get(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id) {
+    public DocumentResponse get(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
         String roleName = resolveRoleName(principal);
-        return DocumentResponse.from(documentService.getVisibleById(id, roleName));
+        Document document = documentService.getVisibleById(id, roleName);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_VIEW",
+            "DOCUMENT",
+            String.valueOf(document.getId()),
+            "title=" + document.getTitle(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return DocumentResponse.from(document);
     }
 
     @PreAuthorize("hasAuthority('DOC_READ')")
@@ -70,41 +104,111 @@ public class DocumentController {
     @PostMapping("/search")
     public List<DocumentSummaryResponse> search(
         @AuthenticationPrincipal UserPrincipal principal,
-        @Valid @RequestBody DocumentSearchRequest request
+        @Valid @RequestBody DocumentSearchRequest request,
+        HttpServletRequest httpRequest
     ) {
         String roleName = resolveRoleName(principal);
-        return documentService.searchVisible(roleName, request.getQuery()).stream()
+        List<DocumentSummaryResponse> response = documentService.searchVisible(roleName, request.getQuery()).stream()
             .map(DocumentSummaryResponse::from)
             .toList();
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_SEARCH",
+            "DOCUMENT",
+            null,
+            "query=" + request.getQuery(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public DocumentSummaryResponse upload(
+        @AuthenticationPrincipal UserPrincipal principal,
         @RequestParam("file") MultipartFile file,
         @RequestParam("allowedRoles") List<String> allowedRoles,
-        @RequestParam(value = "title", required = false) String title
+        @RequestParam(value = "title", required = false) String title,
+        HttpServletRequest httpRequest
     ) {
         List<String> normalized = normalizeRoles(allowedRoles);
-        return DocumentSummaryResponse.from(documentService.upload(file, title, normalized));
+        Document document = documentService.upload(file, title, normalized);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_UPLOAD",
+            "DOCUMENT",
+            String.valueOf(document.getId()),
+            "title=" + document.getTitle(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return DocumentSummaryResponse.from(document);
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
     @PostMapping
-    public DocumentResponse create(@Valid @RequestBody DocumentCreateRequest request) {
-        return DocumentResponse.from(documentService.createText(request));
+    public DocumentResponse create(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @Valid @RequestBody DocumentCreateRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        Document document = documentService.createText(request);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_CREATE",
+            "DOCUMENT",
+            String.valueOf(document.getId()),
+            "title=" + document.getTitle(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return DocumentResponse.from(document);
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
     @PatchMapping("/{id}")
-    public DocumentResponse update(@PathVariable Long id, @Valid @RequestBody DocumentUpdateRequest request) {
-        return DocumentResponse.from(documentService.update(id, request));
+    public DocumentResponse update(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        @Valid @RequestBody DocumentUpdateRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        Document document = documentService.update(id, request);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_UPDATE",
+            "DOCUMENT",
+            String.valueOf(document.getId()),
+            "title=" + document.getTitle(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return DocumentResponse.from(document);
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
         documentService.delete(id);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_DELETE",
+            "DOCUMENT",
+            String.valueOf(id),
+            "delete",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
         return ResponseEntity.noContent().build();
     }
 
@@ -112,7 +216,7 @@ public class DocumentController {
         User user = userService.getById(principal.getId());
         Role role = user.getRole();
         if (role == null || role.getName() == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User has no role");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "用户未分配角色");
         }
         return role.getName();
     }

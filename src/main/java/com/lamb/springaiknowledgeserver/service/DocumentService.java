@@ -73,7 +73,7 @@ public class DocumentService {
     @Transactional
     public Document upload(MultipartFile file, String title, Collection<String> roleNames) {
         if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传文件");
         }
         String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String safeName = originalName.replaceAll("[\\\\/]+", "_");
@@ -82,7 +82,7 @@ public class DocumentService {
         boolean isPdf = isPdf(contentType, extension);
         boolean isText = isText(contentType, extension);
         if (!isPdf && !isText) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only PDF or TXT is supported");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 PDF 或 TXT 文件");
         }
 
         ParsedPdf parsedPdf = isPdf ? extractPdfPages(file) : null;
@@ -106,7 +106,7 @@ public class DocumentService {
     @Transactional
     public Document update(Long id, DocumentUpdateRequest request) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
         boolean contentChanged = false;
         boolean titleChanged = false;
         boolean rolesChanged = false;
@@ -141,7 +141,7 @@ public class DocumentService {
     @Transactional
     public void delete(Long id) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
         deleteFileIfExists(document.getStoragePath());
         List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(id);
         deleteVectors(id, existing);
@@ -163,21 +163,21 @@ public class DocumentService {
         if (hasRoleAccess(document, roleName)) {
             return document;
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
     }
 
     @Transactional(readOnly = true)
     public DocumentChunkPreviewResponse getChunkPreview(Long chunkId, String roleName) {
         DocumentChunk chunk = documentChunkRepository.findById(chunkId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Chunk not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "片段不存在"));
         Document document = chunk.getDocument();
         if (document == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
         }
         if (hasRoleAccess(document, roleName)) {
             return DocumentChunkPreviewResponse.from(chunk);
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No access to document");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
     }
 
     private void rebuildChunks(Document document, List<PageText> pages) {
@@ -328,7 +328,7 @@ public class DocumentService {
             file.transferTo(target);
             return target;
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件保存失败", ex);
         }
     }
 
@@ -339,7 +339,7 @@ public class DocumentService {
         try {
             Files.deleteIfExists(Paths.get(path));
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete file", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件删除失败", ex);
         }
     }
 
@@ -347,7 +347,7 @@ public class DocumentService {
         try {
             return new String(file.getBytes(), StandardCharsets.UTF_8);
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read text file", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文本失败", ex);
         }
     }
 
@@ -375,7 +375,7 @@ public class DocumentService {
                 return new ParsedPdf(full.toString(), pages);
             }
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read PDF", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
         }
     }
 
@@ -417,7 +417,7 @@ public class DocumentService {
 
     private Set<Role> resolveRoles(Collection<String> roleNames) {
         if (roleNames == null || roleNames.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allowed roles required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须指定可访问角色");
         }
         Set<String> normalized = new HashSet<>();
         for (String name : roleNames) {
@@ -426,11 +426,11 @@ public class DocumentService {
             }
         }
         if (normalized.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allowed roles required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须指定可访问角色");
         }
         Collection<Role> roles = roleRepository.findByNameIn(normalized);
         if (roles.size() != normalized.size()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role not found");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "角色不存在");
         }
         return new HashSet<>(roles);
     }
