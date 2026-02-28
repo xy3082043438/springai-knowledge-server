@@ -22,14 +22,18 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
                d.title as title,
                d.file_name as fileName,
                d.content_type as contentType,
-               ts_rank_cd(to_tsvector(:config, c.content), plainto_tsquery(:config, :query)) as score
+               ts_rank_cd(
+                   to_tsvector(cast(:config as regconfig), c.content),
+                   plainto_tsquery(cast(:config as regconfig), :query)
+               ) as score
         from app_document_chunk c
         join app_document d on d.id = c.document_id
         join app_document_role dr on dr.document_id = d.id
         join app_role r on r.id = dr.role_id
         where r.name in (:roleNames)
           and d.status = 'READY'
-          and to_tsvector(:config, c.content) @@ plainto_tsquery(:config, :query)
+          and to_tsvector(cast(:config as regconfig), c.content)
+              @@ plainto_tsquery(cast(:config as regconfig), :query)
         order by score desc
         limit :limit
         """, nativeQuery = true)

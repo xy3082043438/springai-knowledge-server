@@ -14,8 +14,8 @@ public interface QaFeedbackRepository extends JpaRepository<QaFeedback, Long> {
     @Query("""
         select f from QaFeedback f
         where (:userId is null or f.userId = :userId)
-          and (:from is null or f.createdAt >= :from)
-          and (:to is null or f.createdAt <= :to)
+          and (f.createdAt >= coalesce(:from, f.createdAt))
+          and (f.createdAt <= coalesce(:to, f.createdAt))
         order by f.createdAt desc
         """)
     Page<QaFeedback> search(
