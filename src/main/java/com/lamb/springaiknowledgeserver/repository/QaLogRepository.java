@@ -14,14 +14,14 @@ public interface QaLogRepository extends JpaRepository<QaLog, Long> {
     @Query("""
         select l from QaLog l
         where (:userId is null or l.userId = :userId)
-          and (:from is null or l.createdAt >= :from)
-          and (:to is null or l.createdAt <= :to)
+          and (:startTime is null or l.createdAt >= :startTime)
+          and (:endTime is null or l.createdAt <= :endTime)
         order by l.createdAt desc
         """)
     Page<QaLog> search(
         @Param("userId") Long userId,
-        @Param("from") Instant from,
-        @Param("to") Instant to,
+        @Param("startTime") Instant from,
+        @Param("endTime") Instant to,
         Pageable pageable
     );
 }
