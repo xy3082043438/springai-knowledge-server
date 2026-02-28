@@ -37,6 +37,9 @@ public class SystemConfigInitializer implements ApplicationRunner {
     @Value("${app.hybrid.keyword-top-k:6}")
     private int defaultKeywordTopK;
 
+    @Value("${app.keyword.ts-config:simple}")
+    private String defaultTsConfig;
+
     @Value("${app.hybrid.vector-weight:0.7}")
     private double defaultVectorWeight;
 
@@ -68,6 +71,7 @@ public class SystemConfigInitializer implements ApplicationRunner {
         ensureConfig("hybrid.keywordTopK", String.valueOf(defaultKeywordTopK), "关键词检索 TopK");
         ensureConfig("hybrid.vectorWeight", String.valueOf(defaultVectorWeight), "向量检索权重");
         ensureConfig("hybrid.keywordWeight", String.valueOf(defaultKeywordWeight), "关键词检索权重");
+        ensureConfig("keyword.tsConfig", defaultTsConfig, "关键词检索配置");
         ensureConfig("rag.answerStyle", defaultAnswerStyle, "回答风格");
         ensureConfig("rag.maxAnswerChars", String.valueOf(defaultMaxAnswerChars), "回答最大字数");
         ensureConfig("rag.maxOutputTokens", String.valueOf(defaultMaxOutputTokens), "最大输出 Token 数");

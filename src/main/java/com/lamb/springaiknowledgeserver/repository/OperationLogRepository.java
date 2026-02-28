@@ -2,7 +2,8 @@ package com.lamb.springaiknowledgeserver.repository;
 
 import com.lamb.springaiknowledgeserver.entity.OperationLog;
 import java.time.Instant;
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,9 +17,10 @@ public interface OperationLogRepository extends JpaRepository<OperationLog, Long
           and (:to is null or l.createdAt <= :to)
         order by l.createdAt desc
         """)
-    List<OperationLog> search(
+    Page<OperationLog> search(
         @Param("userId") Long userId,
         @Param("from") Instant from,
-        @Param("to") Instant to
+        @Param("to") Instant to,
+        Pageable pageable
     );
 }

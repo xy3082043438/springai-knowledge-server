@@ -1,11 +1,12 @@
 package com.lamb.springaiknowledgeserver.controller;
 
 import com.lamb.springaiknowledgeserver.dto.OperationLogResponse;
+import com.lamb.springaiknowledgeserver.dto.PageResponse;
 import com.lamb.springaiknowledgeserver.repository.OperationLogRepository;
 import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,15 +22,18 @@ public class OperationLogController {
 
     @PreAuthorize("hasAuthority('LOG_READ')")
     @GetMapping
-    public List<OperationLogResponse> search(
+    public PageResponse<OperationLogResponse> search(
         @RequestParam(value = "userId", required = false) Long userId,
         @RequestParam(value = "from", required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
         @RequestParam(value = "to", required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "50") int size
     ) {
-        return operationLogRepository.search(userId, from, to).stream()
-            .map(OperationLogResponse::from)
-            .toList();
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(200, Math.max(1, size));
+        return PageResponse.from(operationLogRepository.search(userId, from, to, PageRequest.of(safePage, safeSize))
+            .map(OperationLogResponse::from));
     }
 }

@@ -3,6 +3,7 @@ package com.lamb.springaiknowledgeserver.controller;
 import com.lamb.springaiknowledgeserver.auth.UserPrincipal;
 import com.lamb.springaiknowledgeserver.dto.DocumentChunkPreviewResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
+import com.lamb.springaiknowledgeserver.dto.DocumentReindexResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentSearchRequest;
 import com.lamb.springaiknowledgeserver.dto.DocumentSummaryResponse;
@@ -149,6 +150,34 @@ public class DocumentController {
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
+    @PostMapping(value = "/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public DocumentSummaryResponse replaceFile(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        @RequestParam("file") MultipartFile file,
+        @RequestParam(value = "allowedRoles", required = false) List<String> allowedRoles,
+        @RequestParam(value = "title", required = false) String title,
+        HttpServletRequest httpRequest
+    ) {
+        List<String> normalized = allowedRoles == null ? null : normalizeRoles(allowedRoles);
+        if (normalized != null && normalized.isEmpty()) {
+            normalized = null;
+        }
+        Document document = documentService.replaceFile(id, file, title, normalized);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_REPLACE_FILE",
+            "DOCUMENT",
+            String.valueOf(document.getId()),
+            "title=" + document.getTitle(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return DocumentSummaryResponse.from(document);
+    }
+
+    @PreAuthorize("hasAuthority('DOC_WRITE')")
     @PostMapping
     public DocumentResponse create(
         @AuthenticationPrincipal UserPrincipal principal,
@@ -210,6 +239,47 @@ public class DocumentController {
             true
         );
         return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("hasAuthority('DOC_WRITE')")
+    @PostMapping("/{id}/reindex")
+    public DocumentReindexResponse reindexOne(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
+        DocumentReindexResponse response = documentService.reindexOne(id);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_REINDEX",
+            "DOCUMENT",
+            String.valueOf(id),
+            "reindex",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
+    }
+
+    @PreAuthorize("hasAuthority('DOC_WRITE')")
+    @PostMapping("/reindex")
+    public DocumentReindexResponse reindexAll(
+        @AuthenticationPrincipal UserPrincipal principal,
+        HttpServletRequest httpRequest
+    ) {
+        DocumentReindexResponse response = documentService.reindexAll();
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "DOC_REINDEX_ALL",
+            "DOCUMENT",
+            null,
+            "reindexAll",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return response;
     }
 
     private String resolveRoleName(UserPrincipal principal) {

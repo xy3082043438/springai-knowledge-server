@@ -88,6 +88,7 @@ public class QaService {
         if (answer == null || answer.isBlank()) {
             answer = DEFAULT_NO_ANSWER;
         }
+        answer = enforceMaxAnswerChars(answer);
 
         documents = resolveDocuments(chunks, roleName);
         sources = buildSources(chunks);
@@ -236,6 +237,20 @@ public class QaService {
             cleaned = cleaned.replace("{maxAnswerChars}", "").replace("{answerStyle}", "").trim();
         }
         return cleaned;
+    }
+
+    private String enforceMaxAnswerChars(String answer) {
+        if (answer == null) {
+            return null;
+        }
+        int limit = resolveMaxAnswerChars();
+        if (limit <= 0 || answer.length() <= limit) {
+            return answer;
+        }
+        if (limit <= 3) {
+            return answer.substring(0, limit);
+        }
+        return answer.substring(0, limit - 3) + "...";
     }
 
     private Long logQa(

@@ -10,11 +10,15 @@ import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class JwtService {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     private final SecretKey key;
     @Getter
@@ -58,6 +62,7 @@ public class JwtService {
             Date expiration = claims.getExpiration();
             return expiration != null && expiration.after(new Date());
         } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("Failed to parse JWT token", ex);
             return false;
         }
     }

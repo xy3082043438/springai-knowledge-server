@@ -32,6 +32,9 @@ public class HybridSearchService {
     @Value("${app.hybrid.keyword-top-k:6}")
     private int keywordTopK;
 
+    @Value("${app.keyword.ts-config:simple}")
+    private String defaultTsConfig;
+
     @Value("${app.hybrid.vector-weight:0.7}")
     private double vectorWeight;
 
@@ -130,7 +133,13 @@ public class HybridSearchService {
 
     private List<KeywordHit> keywordSearch(String roleName, String query) {
         int limit = Math.max(1, resolveKeywordTopK());
-        List<KeywordChunkRow> rows = documentChunkRepository.searchChunksByKeyword(List.of(roleName), query, limit);
+        String config = resolveTsConfig();
+        List<KeywordChunkRow> rows = documentChunkRepository.searchChunksByKeyword(
+            List.of(roleName),
+            config,
+            query,
+            limit
+        );
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -201,6 +210,11 @@ public class HybridSearchService {
 
     private int resolveKeywordTopK() {
         return systemConfigService.getInt("hybrid.keywordTopK", keywordTopK);
+    }
+
+    private String resolveTsConfig() {
+        String value = systemConfigService.getString("keyword.tsConfig", defaultTsConfig);
+        return (value == null || value.isBlank()) ? "simple" : value;
     }
 
     private double resolveVectorWeight() {

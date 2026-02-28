@@ -2,6 +2,7 @@ package com.lamb.springaiknowledgeserver.service;
 
 import com.lamb.springaiknowledgeserver.dto.DocumentChunkPreviewResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentCreateRequest;
+import com.lamb.springaiknowledgeserver.dto.DocumentReindexResponse;
 import com.lamb.springaiknowledgeserver.dto.DocumentUpdateRequest;
 import com.lamb.springaiknowledgeserver.entity.Document;
 import com.lamb.springaiknowledgeserver.entity.DocumentChunk;
@@ -27,6 +28,8 @@ import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -39,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class DocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final RoleRepository roleRepository;
@@ -139,6 +143,48 @@ public class DocumentService {
     }
 
     @Transactional
+    public Document replaceFile(Long id, MultipartFile file, String title, Collection<String> roleNames) {
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传文件");
+        }
+        String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
+        String safeName = originalName.replaceAll("[\\\\/]+", "_");
+        String contentType = file.getContentType();
+        String extension = getExtension(safeName);
+        boolean isPdf = isPdf(contentType, extension);
+        boolean isText = isText(contentType, extension);
+        if (!isPdf && !isText) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 PDF 或 TXT 文件");
+        }
+        ParsedPdf parsedPdf = isPdf ? extractPdfPages(file) : null;
+        String extracted = isPdf ? parsedPdf.text : extractText(file);
+        Path target = storeFile(file, safeName);
+        String oldPath = document.getStoragePath();
+
+        if (title != null && !title.isBlank()) {
+            document.setTitle(title);
+        }
+        if (roleNames != null && !roleNames.isEmpty()) {
+            document.setAllowedRoles(resolveRoles(roleNames));
+        }
+        document.setContent(extracted);
+        document.setFileName(safeName);
+        document.setContentType(contentType != null ? contentType : (isPdf ? "application/pdf" : "text/plain"));
+        document.setFileSize(file.getSize());
+        document.setStoragePath(target.toString());
+        document.setStatus(DocumentStatus.READY);
+
+        Document saved = documentRepository.save(document);
+        rebuildChunks(saved, parsedPdf == null ? null : parsedPdf.pages);
+        if (oldPath != null && !oldPath.isBlank()) {
+            deleteFileIfExists(oldPath);
+        }
+        return saved;
+    }
+
+    @Transactional
     public void delete(Long id) {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
@@ -159,7 +205,7 @@ public class DocumentService {
 
     public Document getVisibleById(Long id, String roleName) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
         if (hasRoleAccess(document, roleName)) {
             return document;
         }
@@ -180,6 +226,33 @@ public class DocumentService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
     }
 
+    @Transactional
+    public DocumentReindexResponse reindexAll() {
+        List<Document> documents = documentRepository.findAll();
+        int total = documents.size();
+        int success = 0;
+        List<Long> failedIds = new ArrayList<>();
+        for (Document document : documents) {
+            try {
+                rebuildForDocument(document);
+                success++;
+            } catch (Exception ex) {
+                log.debug("Failed to reindex document {}", document.getId(), ex);
+                failedIds.add(document.getId());
+            }
+        }
+        int failed = total - success;
+        return new DocumentReindexResponse(total, success, failed, failedIds);
+    }
+
+    @Transactional
+    public DocumentReindexResponse reindexOne(Long id) {
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+        rebuildForDocument(document);
+        return new DocumentReindexResponse(1, 1, 0, List.of());
+    }
+
     private void rebuildChunks(Document document, List<PageText> pages) {
         List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId());
         deleteVectors(document.getId(), existing);
@@ -192,6 +265,14 @@ public class DocumentService {
         }
         List<DocumentChunk> saved = documentChunkRepository.saveAll(chunks);
         vectorStore.add(toVectorDocuments(document, saved));
+    }
+
+    private void rebuildForDocument(Document document) {
+        List<PageText> pages = null;
+        if (document.getContentType() != null && document.getContentType().contains("pdf")) {
+            pages = extractPdfPages(document.getStoragePath());
+        }
+        rebuildChunks(document, pages);
     }
 
     private List<DocumentChunk> splitToChunks(Document document) {
@@ -373,6 +454,32 @@ public class DocumentService {
                     }
                 }
                 return new ParsedPdf(full.toString(), pages);
+            }
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
+        }
+    }
+
+    private List<PageText> extractPdfPages(String path) {
+        if (path == null || path.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(Paths.get(path));
+            try (PDDocument doc = Loader.loadPDF(bytes)) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                int totalPages = doc.getNumberOfPages();
+                List<PageText> pages = new ArrayList<>();
+                for (int page = 1; page <= totalPages; page++) {
+                    stripper.setStartPage(page);
+                    stripper.setEndPage(page);
+                    String text = stripper.getText(doc);
+                    if (text == null) {
+                        text = "";
+                    }
+                    pages.add(new PageText(page, text));
+                }
+                return pages;
             }
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
