@@ -50,6 +50,7 @@ app:
     storage-path: ./data/documents
     chunk-size: 1000
     chunk-overlap: 200
+    embedding-safe-chunk-size: 320
   rag:
     answer-style: 简洁、准确、专业
     max-answer-chars: 300

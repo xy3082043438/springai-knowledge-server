@@ -58,6 +58,9 @@ public class DocumentService {
     @Value("${app.document.chunk-overlap}")
     private int chunkOverlap;
 
+    @Value("${app.document.embedding-safe-chunk-size:320}")
+    private int embeddingSafeChunkSize;
+
     @Transactional
     public Document createText(DocumentCreateRequest request) {
         Set<Role> roles = resolveRoles(request.getAllowedRoles());
@@ -552,7 +555,9 @@ public class DocumentService {
     }
 
     private int resolveChunkSize() {
-        return systemConfigService.getInt("chunk.size", chunkSize);
+        int configuredSize = Math.max(1, systemConfigService.getInt("chunk.size", chunkSize));
+        int safeSize = Math.max(1, systemConfigService.getInt("chunk.embeddingSafeSize", embeddingSafeChunkSize));
+        return Math.min(configuredSize, safeSize);
     }
 
     private int resolveChunkOverlap() {

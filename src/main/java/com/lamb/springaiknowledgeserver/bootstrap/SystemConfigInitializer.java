@@ -25,6 +25,9 @@ public class SystemConfigInitializer implements ApplicationRunner {
     @Value("${app.document.chunk-overlap}")
     private int defaultChunkOverlap;
 
+    @Value("${app.document.embedding-safe-chunk-size:320}")
+    private int defaultEmbeddingSafeChunkSize;
+
     @Value("${app.hybrid.top-k:6}")
     private int defaultHybridTopK;
 
@@ -65,6 +68,7 @@ public class SystemConfigInitializer implements ApplicationRunner {
     public void run(@NonNull ApplicationArguments args) {
         ensureConfig("chunk.size", String.valueOf(defaultChunkSize), "文本切分长度");
         ensureConfig("chunk.overlap", String.valueOf(defaultChunkOverlap), "文本切分重叠长度");
+        ensureConfig("chunk.embeddingSafeSize", String.valueOf(defaultEmbeddingSafeChunkSize), "Embedding 安全分块上限");
         ensureConfig("hybrid.topK", String.valueOf(defaultHybridTopK), "混合检索返回数量");
         ensureConfig("hybrid.vectorTopK", String.valueOf(defaultVectorTopK), "向量检索 TopK");
         ensureConfig("hybrid.vectorSimilarityThreshold", String.valueOf(defaultVectorThreshold), "向量检索相似度阈值");
