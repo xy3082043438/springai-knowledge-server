@@ -10,6 +10,8 @@ import com.lamb.springaiknowledgeserver.entity.QaLog;
 import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
 import com.lamb.springaiknowledgeserver.repository.QaLogRepository;
+import java.io.InterruptedIOException;
+import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -57,6 +59,9 @@ public class QaService {
     @Value("${app.rag.top-p:0.9}")
     private double topP;
 
+    @Value("${spring.ai.openai.chat.options.model:}")
+    private String defaultChatModel;
+
     public QaResponse answer(Long userId, String username, String roleName, String question) {
         List<HybridSearchService.HybridChunk> chunks;
         try {
@@ -83,6 +88,9 @@ public class QaService {
                 .call()
                 .content();
         } catch (Exception ex) {
+            if (isTimeoutException(ex)) {
+                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "模型调用超时，请稍后重试", ex);
+            }
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "模型调用失败", ex);
         }
         if (answer == null || answer.isBlank()) {
@@ -205,6 +213,9 @@ public class QaService {
         if (resolvedTopP > 0 && resolvedTopP <= 1) {
             builder.topP(resolvedTopP);
         }
+        if (shouldDisableThinking()) {
+            builder.extraBody(Map.of("enable_thinking", false));
+        }
         return builder.build();
     }
 
@@ -226,6 +237,10 @@ public class QaService {
 
     private double resolveTopP() {
         return systemConfigService.getDouble("rag.topP", topP);
+    }
+
+    private boolean shouldDisableThinking() {
+        return defaultChatModel != null && defaultChatModel.startsWith("Qwen/Qwen3");
     }
 
     private String cleanupPrompt(String prompt) {
@@ -291,5 +306,16 @@ public class QaService {
             log.debug("Failed to serialize retrieval payload", ex);
             return null;
         }
+    }
+
+    private boolean isTimeoutException(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof HttpTimeoutException || current instanceof InterruptedIOException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

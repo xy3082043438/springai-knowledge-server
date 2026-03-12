@@ -8,11 +8,11 @@ import com.lamb.springaiknowledgeserver.entity.QaFeedback;
 import com.lamb.springaiknowledgeserver.entity.QaLog;
 import com.lamb.springaiknowledgeserver.repository.QaFeedbackRepository;
 import com.lamb.springaiknowledgeserver.repository.QaLogRepository;
+import com.lamb.springaiknowledgeserver.util.RequestInstantParser;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,6 +32,7 @@ public class QaFeedbackController {
 
     private final QaFeedbackRepository qaFeedbackRepository;
     private final QaLogRepository qaLogRepository;
+    private final RequestInstantParser requestInstantParser;
 
     @PreAuthorize("hasAuthority('FEEDBACK_WRITE')")
     @PostMapping
@@ -62,16 +63,20 @@ public class QaFeedbackController {
     @GetMapping
     public PageResponse<QaFeedbackResponse> search(
         @RequestParam(value = "userId", required = false) Long userId,
-        @RequestParam(value = "from", required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-        @RequestParam(value = "to", required = false)
-        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+        @RequestParam(value = "from", required = false) String from,
+        @RequestParam(value = "to", required = false) String to,
         @RequestParam(value = "page", defaultValue = "0") int page,
         @RequestParam(value = "size", defaultValue = "50") int size
     ) {
         int safePage = Math.max(0, page);
         int safeSize = Math.min(200, Math.max(1, size));
-        return PageResponse.from(qaFeedbackRepository.search(userId, from, to, PageRequest.of(safePage, safeSize))
-            .map(QaFeedbackResponse::from));
+        Instant fromInstant = requestInstantParser.parse(from, "from");
+        Instant toInstant = requestInstantParser.parse(to, "to");
+        return PageResponse.from(qaFeedbackRepository.search(
+            userId,
+            fromInstant,
+            toInstant,
+            PageRequest.of(safePage, safeSize)
+        ).map(QaFeedbackResponse::from));
     }
 }

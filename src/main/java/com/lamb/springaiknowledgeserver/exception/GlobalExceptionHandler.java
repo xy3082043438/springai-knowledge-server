@@ -5,17 +5,21 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.stream.Collectors;
+import org.apache.catalina.connector.ClientAbortException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -74,6 +78,17 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "请求体格式错误", request);
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+        MethodArgumentTypeMismatchException ex,
+        HttpServletRequest request
+    ) {
+        String name = ex.getName();
+        String message = (name.isBlank() ? "请求参数" : name) + ": 参数格式错误";
+        log.debug("Request parameter type mismatch", ex);
+        return build(HttpStatus.BAD_REQUEST, message, request);
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiErrorResponse> handleMaxUpload(
         MaxUploadSizeExceededException ex,
@@ -92,8 +107,25 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "无权限访问", request);
     }
 
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public ResponseEntity<?> handleNotWritable(
+        HttpMessageNotWritableException ex,
+        HttpServletRequest request
+    ) {
+        if (isClientAbort(ex)) {
+            log.debug("Client disconnected before response completed [{}]", requestUri(request));
+            return ResponseEntity.noContent().build();
+        }
+        log.error("Failed to write response", ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "服务异常，请稍后重试", request);
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+    public ResponseEntity<?> handleGeneric(Exception ex, HttpServletRequest request) {
+        if (isClientAbort(ex)) {
+            log.debug("Client disconnected before response completed [{}]", requestUri(request));
+            return ResponseEntity.noContent().build();
+        }
         log.error("Unhandled exception", ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "服务异常，请稍后重试", request);
     }
@@ -141,5 +173,20 @@ public class GlobalExceptionHandler {
             return "服务异常，请稍后重试";
         }
         return "请求处理失败";
+    }
+
+    private boolean isClientAbort(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof ClientAbortException || current instanceof AsyncRequestNotUsableException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private String requestUri(HttpServletRequest request) {
+        return request == null ? "unknown" : request.getRequestURI();
     }
 }

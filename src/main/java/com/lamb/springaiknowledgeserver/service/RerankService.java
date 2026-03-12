@@ -1,6 +1,7 @@
 package com.lamb.springaiknowledgeserver.service;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -11,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -36,6 +38,12 @@ public class RerankService {
 
     @Value("${app.rerank.max-docs:30}")
     private int maxDocs;
+
+    @Value("${app.rerank.connect-timeout-ms:3000}")
+    private long connectTimeoutMs;
+
+    @Value("${app.rerank.read-timeout-ms:5000}")
+    private long readTimeoutMs;
 
     @Value("${spring.ai.openai.api-key:}")
     private String apiKey;
@@ -92,7 +100,10 @@ public class RerankService {
 
     private RerankResponse callRerank(RerankRequest request) {
         try {
-            RestClient client = restClientBuilder.build();
+            RestClient client = restClientBuilder
+                .clone()
+                .requestFactory(clientHttpRequestFactory())
+                .build();
             return client.post()
                 .uri(baseUrl)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -108,6 +119,17 @@ public class RerankService {
             log.debug("Failed to call rerank API", ex);
             return null;
         }
+    }
+
+    private SimpleClientHttpRequestFactory clientHttpRequestFactory() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        if (connectTimeoutMs > 0) {
+            factory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
+        }
+        if (readTimeoutMs > 0) {
+            factory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
+        }
+        return factory;
     }
 
     private HybridSearchService.HybridChunk withCombinedScore(
