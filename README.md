@@ -6,7 +6,7 @@
 
 - JWT 无状态鉴权，`logout` 通过递增 `tokenVersion` 让旧 Token 失效
 - 用户、角色、权限管理
-- 文档管理：文本录入、`PDF/TXT` 上传、替换文件、更新内容、删除、单个或全量重建索引
+- 文档管理：文本录入、`PDF/DOCX/PPTX/XLSX/TXT/MD/HTML/CSV` 上传、替换文件、更新内容、删除、单个或全量重建索引
 - 文档按角色控制可见范围，支持命中文档片段预览
 - 混合检索：向量检索 + PostgreSQL 全文检索加权融合
 - 可选调用 SiliconFlow `rerank` 接口进行二次排序，失败时自动回退原始排序
@@ -24,6 +24,8 @@
 - Spring Data JPA
 - PostgreSQL + `pgvector`
 - PDFBox
+- Apache POI
+- jsoup
 - springdoc-openapi
 
 ## 检索与问答链路
@@ -326,12 +328,13 @@ curl -X POST "http://localhost:8080/api/config/refresh" \
 
 ## 文档入库规则
 
-- 上传仅支持 `PDF` 与 `TXT`
+- 上传支持 `PDF`、`DOCX`、`PPTX`、`XLSX`、`TXT`、`MD`、`HTML`、`CSV`
 - 单文件默认最大 50MB
 - 上传文件会保存到 `app.document.storage-path` 指定目录，默认 `./data/documents`
 - 新建文本文档与上传文件时都必须指定 `allowedRoles`
 - `POST /api/documents/{id}/file` 中 `allowedRoles` 可省略，省略时沿用原权限
-- PDF 会按页提取文本，片段保留 `pageNumber`、`startOffset`、`endOffset`
+- `PDF` 会按页提取文本，`PPTX` 会按幻灯片提取文本，`XLSX` 会按 sheet 提取文本，片段保留 `pageNumber`、`startOffset`、`endOffset`
+- `TXT/MD/HTML/CSV` 按 UTF-8 文本处理，其中 `HTML` 会先提取纯文本
 - 文本切块实际大小为 `min(chunk.size, chunk.embeddingSafeSize)`
 - 更新文档正文会重建切片与向量；仅修改标题或角色时会刷新向量元数据
 
@@ -394,5 +397,5 @@ curl -X POST "http://localhost:8080/api/config/refresh" \
 - 启动报错 `Could not resolve placeholder 'RABBITMQ_PASSWORD'`：虽然当前没有 MQ 业务逻辑，但配置里仍引用了该占位符
 - 启动报错 `JWT secret must be at least 32 characters`：请设置长度不少于 32 的 `SECURITY_JWT_SECRET`
 - 报错 `type "vector" does not exist`：数据库未启用 `pgvector`
-- 上传失败：仅支持 `PDF/TXT` 且默认大小不超过 50MB
+- 上传失败：仅支持 `PDF/DOCX/PPTX/XLSX/TXT/MD/HTML/CSV` 且默认大小不超过 50MB
 - `/api/system/status` 或 `/api/system/boundary` 返回 401：这两个接口不是公开接口，需要先登录

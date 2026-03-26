@@ -11,6 +11,7 @@ import com.lamb.springaiknowledgeserver.entity.Role;
 import com.lamb.springaiknowledgeserver.repository.DocumentChunkRepository;
 import com.lamb.springaiknowledgeserver.repository.DocumentRepository;
 import com.lamb.springaiknowledgeserver.repository.RoleRepository;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,6 +29,23 @@ import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFGroupShape;
+import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFSlide;
+import org.apache.poi.xslf.usermodel.XSLFTable;
+import org.apache.poi.xslf.usermodel.XSLFTableCell;
+import org.apache.poi.xslf.usermodel.XSLFTableRow;
+import org.apache.poi.xslf.usermodel.XSLFTextShape;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -43,6 +61,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+    private static final String SUPPORTED_UPLOAD_TYPES = "PDF/DOCX/PPTX/XLSX/TXT/MD/HTML/CSV";
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final RoleRepository roleRepository;
@@ -84,29 +103,21 @@ public class DocumentService {
         }
         String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String safeName = originalName.replaceAll("[\\\\/]+", "_");
-        String contentType = file.getContentType();
-        String extension = getExtension(safeName);
-        boolean isPdf = isPdf(contentType, extension);
-        boolean isText = isText(contentType, extension);
-        if (!isPdf && !isText) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 PDF 或 TXT 文件");
-        }
-
-        ParsedPdf parsedPdf = isPdf ? extractPdfPages(file) : null;
-        String extracted = isPdf ? parsedPdf.text : extractText(file);
+        DocumentFileType fileType = resolveUploadFileType(file.getContentType(), safeName);
+        ParsedContent parsed = extractContent(file, fileType);
         Path target = storeFile(file, safeName);
 
         Document document = new Document();
         document.setTitle((title == null || title.isBlank()) ? safeName : title);
-        document.setContent(extracted);
+        document.setContent(parsed.text);
         document.setFileName(safeName);
-        document.setContentType(contentType != null ? contentType : (isPdf ? "application/pdf" : "text/plain"));
+        document.setContentType(fileType.defaultContentType);
         document.setFileSize(file.getSize());
         document.setStoragePath(target.toString());
         document.setStatus(DocumentStatus.READY);
         document.setAllowedRoles(resolveRoles(roleNames));
         Document saved = documentRepository.save(document);
-        rebuildChunks(saved, parsedPdf == null ? null : parsedPdf.pages);
+        rebuildChunks(saved, parsed.pages);
         return saved;
     }
 
@@ -154,15 +165,8 @@ public class DocumentService {
         }
         String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String safeName = originalName.replaceAll("[\\\\/]+", "_");
-        String contentType = file.getContentType();
-        String extension = getExtension(safeName);
-        boolean isPdf = isPdf(contentType, extension);
-        boolean isText = isText(contentType, extension);
-        if (!isPdf && !isText) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 PDF 或 TXT 文件");
-        }
-        ParsedPdf parsedPdf = isPdf ? extractPdfPages(file) : null;
-        String extracted = isPdf ? parsedPdf.text : extractText(file);
+        DocumentFileType fileType = resolveUploadFileType(file.getContentType(), safeName);
+        ParsedContent parsed = extractContent(file, fileType);
         Path target = storeFile(file, safeName);
         String oldPath = document.getStoragePath();
 
@@ -172,15 +176,15 @@ public class DocumentService {
         if (roleNames != null && !roleNames.isEmpty()) {
             document.setAllowedRoles(resolveRoles(roleNames));
         }
-        document.setContent(extracted);
+        document.setContent(parsed.text);
         document.setFileName(safeName);
-        document.setContentType(contentType != null ? contentType : (isPdf ? "application/pdf" : "text/plain"));
+        document.setContentType(fileType.defaultContentType);
         document.setFileSize(file.getSize());
         document.setStoragePath(target.toString());
         document.setStatus(DocumentStatus.READY);
 
         Document saved = documentRepository.save(document);
-        rebuildChunks(saved, parsedPdf == null ? null : parsedPdf.pages);
+        rebuildChunks(saved, parsed.pages);
         if (oldPath != null && !oldPath.isBlank()) {
             deleteFileIfExists(oldPath);
         }
@@ -271,11 +275,14 @@ public class DocumentService {
     }
 
     private void rebuildForDocument(Document document) {
-        List<PageText> pages = null;
-        if (document.getContentType() != null && document.getContentType().contains("pdf")) {
-            pages = extractPdfPages(document.getStoragePath());
+        ParsedContent parsed = extractStoredContent(document);
+        if (parsed != null) {
+            document.setContent(parsed.text);
+            Document saved = documentRepository.save(document);
+            rebuildChunks(saved, parsed.pages);
+            return;
         }
-        rebuildChunks(document, pages);
+        rebuildChunks(document, null);
     }
 
     private List<DocumentChunk> splitToChunks(Document document) {
@@ -427,73 +434,203 @@ public class DocumentService {
         }
     }
 
-    private String extractText(MultipartFile file) {
+    private ParsedContent extractContent(MultipartFile file, DocumentFileType fileType) {
         try {
-            return new String(file.getBytes(), StandardCharsets.UTF_8);
+            return extractContent(file.getBytes(), fileType);
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文本失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文件失败", ex);
         }
     }
 
-    private ParsedPdf extractPdfPages(MultipartFile file) {
-        try {
-            byte[] bytes = file.getBytes();
-            try (PDDocument doc = Loader.loadPDF(bytes)) {
-                PDFTextStripper stripper = new PDFTextStripper();
-                int totalPages = doc.getNumberOfPages();
-                List<PageText> pages = new ArrayList<>();
-                StringBuilder full = new StringBuilder();
-                for (int page = 1; page <= totalPages; page++) {
-                    stripper.setStartPage(page);
-                    stripper.setEndPage(page);
-                    String text = stripper.getText(doc);
-                    if (text == null) {
-                        text = "";
-                    }
-                    pages.add(new PageText(page, text));
-                    full.append(text);
-                    if (page < totalPages) {
-                        full.append('\n');
-                    }
-                }
-                return new ParsedPdf(full.toString(), pages);
-            }
-        } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
+    private ParsedContent extractStoredContent(Document document) {
+        if (document.getStoragePath() == null || document.getStoragePath().isBlank()) {
+            return null;
         }
-    }
-
-    private List<PageText> extractPdfPages(String path) {
-        if (path == null || path.isBlank()) {
+        DocumentFileType fileType = resolveStoredFileType(document.getContentType());
+        if (fileType == null) {
             return null;
         }
         try {
-            byte[] bytes = Files.readAllBytes(Paths.get(path));
-            try (PDDocument doc = Loader.loadPDF(bytes)) {
-                PDFTextStripper stripper = new PDFTextStripper();
-                int totalPages = doc.getNumberOfPages();
-                List<PageText> pages = new ArrayList<>();
-                for (int page = 1; page <= totalPages; page++) {
-                    stripper.setStartPage(page);
-                    stripper.setEndPage(page);
-                    String text = stripper.getText(doc);
-                    if (text == null) {
-                        text = "";
-                    }
-                    pages.add(new PageText(page, text));
-                }
-                return pages;
+            return extractContent(Files.readAllBytes(Paths.get(document.getStoragePath())), fileType);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文件失败", ex);
+        }
+    }
+
+    private ParsedContent extractContent(byte[] bytes, DocumentFileType fileType) {
+        return switch (fileType) {
+            case PDF -> extractPdf(bytes);
+            case DOCX -> extractDocx(bytes);
+            case PPTX -> extractPptx(bytes);
+            case XLSX -> extractXlsx(bytes);
+            case HTML -> extractHtml(bytes);
+            case TXT, MARKDOWN, CSV -> new ParsedContent(new String(bytes, StandardCharsets.UTF_8), null);
+        };
+    }
+
+    private ParsedContent extractPdf(byte[] bytes) {
+        try (PDDocument doc = Loader.loadPDF(bytes)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            int totalPages = doc.getNumberOfPages();
+            List<PageText> pages = new ArrayList<>();
+            for (int page = 1; page <= totalPages; page++) {
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                String text = stripper.getText(doc);
+                pages.add(new PageText(page, text == null ? "" : text));
             }
+            return new ParsedContent(joinPages(pages), pages);
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
         }
     }
 
-    private static final class ParsedPdf {
+    private ParsedContent extractDocx(byte[] bytes) {
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(bytes));
+             XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
+            return new ParsedContent(extractor.getText(), null);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 DOCX 失败", ex);
+        }
+    }
+
+    private ParsedContent extractPptx(byte[] bytes) {
+        try (XMLSlideShow slideShow = new XMLSlideShow(new ByteArrayInputStream(bytes))) {
+            List<PageText> pages = new ArrayList<>();
+            int index = 1;
+            for (XSLFSlide slide : slideShow.getSlides()) {
+                pages.add(new PageText(index++, extractSlideText(slide)));
+            }
+            return new ParsedContent(joinPages(pages), pages);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PPTX 失败", ex);
+        }
+    }
+
+    private String extractSlideText(XSLFSlide slide) {
+        StringBuilder text = new StringBuilder();
+        for (XSLFShape shape : slide.getShapes()) {
+            appendSlideShapeText(shape, text);
+        }
+        return text.toString();
+    }
+
+    private void appendSlideShapeText(XSLFShape shape, StringBuilder text) {
+        if (shape instanceof XSLFTextShape textShape) {
+            appendTextSegment(text, textShape.getText());
+            return;
+        }
+        if (shape instanceof XSLFTable table) {
+            for (XSLFTableRow row : table.getRows()) {
+                List<String> cells = new ArrayList<>();
+                for (XSLFTableCell cell : row.getCells()) {
+                    cells.add(cell == null ? "" : cell.getText());
+                }
+                appendTextSegment(text, joinCellValues(cells));
+            }
+            return;
+        }
+        if (shape instanceof XSLFGroupShape groupShape) {
+            for (XSLFShape child : groupShape.getShapes()) {
+                appendSlideShapeText(child, text);
+            }
+        }
+    }
+
+    private ParsedContent extractXlsx(byte[] bytes) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
+            DataFormatter formatter = new DataFormatter();
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            List<PageText> pages = new ArrayList<>();
+            int index = 1;
+            for (Sheet sheet : workbook) {
+                pages.add(new PageText(index++, extractSheetText(sheet, formatter, evaluator)));
+            }
+            return new ParsedContent(joinPages(pages), pages);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 XLSX 失败", ex);
+        }
+    }
+
+    private String extractSheetText(Sheet sheet, DataFormatter formatter, FormulaEvaluator evaluator) {
+        StringBuilder text = new StringBuilder();
+        appendTextSegment(text, "Sheet: " + sheet.getSheetName());
+        for (Row row : sheet) {
+            int lastCellNum = row.getLastCellNum();
+            if (lastCellNum < 0) {
+                continue;
+            }
+            List<String> cells = new ArrayList<>();
+            for (int index = 0; index < lastCellNum; index++) {
+                Cell cell = row.getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+                cells.add(cell == null ? "" : formatter.formatCellValue(cell, evaluator));
+            }
+            appendTextSegment(text, joinCellValues(cells));
+        }
+        return text.toString();
+    }
+
+    private ParsedContent extractHtml(byte[] bytes) {
+        org.jsoup.nodes.Document html = Jsoup.parse(new String(bytes, StandardCharsets.UTF_8));
+        html.outputSettings().prettyPrint(false);
+        html.select("br").append("\\n");
+        html.select("p,div,li,tr,h1,h2,h3,h4,h5,h6,section,article").prepend("\\n").append("\\n");
+        html.select("td,th").append(" | ");
+        String bodyText = html.body().text().replace("\\n", "\n");
+        String title = html.title();
+        if (!title.isBlank() && !bodyText.startsWith(title)) {
+            bodyText = title + "\n" + bodyText;
+        }
+        return new ParsedContent(bodyText, null);
+    }
+
+    private String joinPages(List<PageText> pages) {
+        StringBuilder full = new StringBuilder();
+        for (int index = 0; index < pages.size(); index++) {
+            full.append(pages.get(index).text);
+            if (index < pages.size() - 1) {
+                full.append('\n');
+            }
+        }
+        return full.toString();
+    }
+
+    private void appendTextSegment(StringBuilder target, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (!target.isEmpty()) {
+            target.append('\n');
+        }
+        target.append(value.trim());
+    }
+
+    private String joinCellValues(List<String> cells) {
+        int last = cells.size() - 1;
+        while (last >= 0 && (cells.get(last) == null || cells.get(last).isBlank())) {
+            last--;
+        }
+        if (last < 0) {
+            return "";
+        }
+        StringBuilder row = new StringBuilder();
+        for (int index = 0; index <= last; index++) {
+            if (index > 0) {
+                row.append('\t');
+            }
+            String value = cells.get(index);
+            if (value != null) {
+                row.append(value.trim());
+            }
+        }
+        return row.toString();
+    }
+
+    private static final class ParsedContent {
         private final String text;
         private final List<PageText> pages;
 
-        private ParsedPdf(String text, List<PageText> pages) {
+        private ParsedContent(String text, List<PageText> pages) {
             this.text = text;
             this.pages = pages;
         }
@@ -509,12 +646,56 @@ public class DocumentService {
         }
     }
 
-    private boolean isPdf(String contentType, String extension) {
-        return "pdf".equalsIgnoreCase(extension) || (contentType != null && contentType.contains("pdf"));
+    private DocumentFileType resolveUploadFileType(String contentType, String fileName) {
+        String normalizedContentType = normalizeContentType(contentType);
+        if (normalizedContentType != null) {
+            for (DocumentFileType type : DocumentFileType.values()) {
+                if (type.matchesContentType(normalizedContentType) && !type.isGenericTextType()) {
+                    return type;
+                }
+            }
+        }
+
+        String extension = getExtension(fileName);
+        for (DocumentFileType type : DocumentFileType.values()) {
+            if (type.matchesExtension(extension)) {
+                return type;
+            }
+        }
+
+        if (normalizedContentType != null) {
+            if ("text/plain".equals(normalizedContentType)) {
+                return DocumentFileType.TXT;
+            }
+            for (DocumentFileType type : DocumentFileType.values()) {
+                if (type.matchesContentType(normalizedContentType)) {
+                    return type;
+                }
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 " + SUPPORTED_UPLOAD_TYPES + " 文件");
     }
 
-    private boolean isText(String contentType, String extension) {
-        return "txt".equalsIgnoreCase(extension) || (contentType != null && contentType.startsWith("text/"));
+    private DocumentFileType resolveStoredFileType(String contentType) {
+        String normalizedContentType = normalizeContentType(contentType);
+        if (normalizedContentType == null) {
+            return null;
+        }
+        for (DocumentFileType type : DocumentFileType.values()) {
+            if (type != DocumentFileType.TXT && type.matchesContentType(normalizedContentType)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    private String normalizeContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return null;
+        }
+        int separator = contentType.indexOf(';');
+        String normalized = separator >= 0 ? contentType.substring(0, separator) : contentType;
+        return normalized.trim().toLowerCase();
     }
 
     private String getExtension(String fileName) {
@@ -523,6 +704,51 @@ public class DocumentService {
             return "";
         }
         return fileName.substring(idx + 1);
+    }
+
+    private enum DocumentFileType {
+        PDF("application/pdf", Set.of("pdf"), Set.of("application/pdf")),
+        DOCX(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            Set.of("docx"),
+            Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        ),
+        PPTX(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            Set.of("pptx"),
+            Set.of("application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        ),
+        XLSX(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Set.of("xlsx"),
+            Set.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        ),
+        TXT("text/plain", Set.of("txt"), Set.of("text/plain")),
+        MARKDOWN("text/markdown", Set.of("md", "markdown"), Set.of("text/markdown", "text/x-markdown")),
+        HTML("text/html", Set.of("html", "htm"), Set.of("text/html", "application/xhtml+xml")),
+        CSV("text/csv", Set.of("csv"), Set.of("text/csv", "application/csv", "application/vnd.ms-excel"));
+
+        private final String defaultContentType;
+        private final Set<String> extensions;
+        private final Set<String> contentTypes;
+
+        DocumentFileType(String defaultContentType, Set<String> extensions, Set<String> contentTypes) {
+            this.defaultContentType = defaultContentType;
+            this.extensions = extensions;
+            this.contentTypes = contentTypes;
+        }
+
+        private boolean matchesExtension(String extension) {
+            return extension != null && extensions.contains(extension.toLowerCase());
+        }
+
+        private boolean matchesContentType(String contentType) {
+            return contentType != null && contentTypes.contains(contentType);
+        }
+
+        private boolean isGenericTextType() {
+            return this == TXT;
+        }
     }
 
     private Set<Role> resolveRoles(Collection<String> roleNames) {
