@@ -32,3 +32,4 @@ build/
 ### VS Code ###
 .vscode/
 /data/
+/src/test/java/com/lamb/springaiknowledgeserver/service/UserServiceTest.java

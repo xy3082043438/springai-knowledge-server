@@ -198,8 +198,10 @@ curl -X POST "http://localhost:8080/api/auth/logout" \
 | `GET` | `/api/users/me` | 已登录 |
 | `PATCH` | `/api/users/me` | 已登录 |
 | `GET` | `/api/users` | `USER_READ` |
+| `GET` | `/api/users/{id}` | `USER_READ` |
 | `POST` | `/api/users` | `USER_WRITE` |
 | `PATCH` | `/api/users/{id}` | `USER_WRITE` |
+| `DELETE` | `/api/users/{id}` | `USER_WRITE` |
 | `GET` | `/api/roles` | `ROLE_READ` |
 | `GET` | `/api/roles/{id}` | `ROLE_READ` |
 | `POST` | `/api/roles` | `ROLE_WRITE` |

@@ -13,8 +13,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -92,6 +94,27 @@ public class UserController {
         return response;
     }
 
+    @PreAuthorize("hasAuthority('USER_READ')")
+    @GetMapping("/{id}")
+    public UserResponse get(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
+        User user = userService.getById(id);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "USER_VIEW",
+            "USER",
+            String.valueOf(user.getId()),
+            "username=" + user.getUsername(),
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return UserResponse.from(user);
+    }
+
     @PreAuthorize("hasAuthority('USER_WRITE')")
     @PostMapping
     public UserResponse create(
@@ -133,5 +156,26 @@ public class UserController {
             true
         );
         return UserResponse.from(user);
+    }
+
+    @PreAuthorize("hasAuthority('USER_WRITE')")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id,
+        HttpServletRequest httpRequest
+    ) {
+        userService.deleteUser(id, principal.getId());
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "USER_DELETE",
+            "USER",
+            String.valueOf(id),
+            "delete",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return ResponseEntity.noContent().build();
     }
 }

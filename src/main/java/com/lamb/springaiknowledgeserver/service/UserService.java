@@ -70,6 +70,14 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    public void deleteUser(Long id, Long currentUserId) {
+        if (id != null && id.equals(currentUserId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current user cannot be deleted");
+        }
+        User user = getById(id);
+        userRepository.delete(user);
+    }
+
     private Role resolveRole(String roleName) {
         String effectiveName = (roleName == null || roleName.isBlank()) ? "USER" : roleName;
         return roleRepository.findByName(effectiveName)
