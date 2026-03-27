@@ -1,9 +1,6 @@
 package com.lamb.springaiknowledgeserver.controller;
 
-import com.lamb.springaiknowledgeserver.config.SystemBoundaryText;
-import com.lamb.springaiknowledgeserver.dto.SystemBoundaryResponse;
 import com.lamb.springaiknowledgeserver.dto.SystemStatusResponse;
-import com.lamb.springaiknowledgeserver.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.health.contributor.Status;
@@ -16,17 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SystemInfoController {
 
-    private final SystemConfigService systemConfigService;
     private final HealthEndpoint healthEndpoint;
-
-    @GetMapping("/boundary")
-    public SystemBoundaryResponse boundary() {
-        String boundary = systemConfigService.getString(
-            "system.boundary",
-            SystemBoundaryText.DEFAULT_BOUNDARY
-        );
-        return new SystemBoundaryResponse(boundary);
-    }
 
     @GetMapping("/status")
     public SystemStatusResponse status() {

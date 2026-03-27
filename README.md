@@ -241,7 +241,6 @@ curl -X POST "http://localhost:8080/api/auth/logout" \
 | `GET` | `/api/config/{key}` | `CONFIG_READ` |
 | `PUT` | `/api/config/{key}` | `CONFIG_WRITE` |
 | `POST` | `/api/config/refresh` | `CONFIG_WRITE` |
-| `GET` | `/api/system/boundary` | 已登录 |
 | `GET` | `/api/system/status` | 已登录 |
 
 完整请求体和响应结构请以 Swagger 为准。
@@ -388,8 +387,6 @@ curl -X POST "http://localhost:8080/api/config/refresh" \
 - `rag.topP`
 - `rag.prompt.system`
 - `rag.prompt.user`
-- `system.boundary`
-
 系统配置采用内存缓存，默认 TTL 为 `2000ms`。调用 `POST /api/config/refresh` 后会立即失效重载。
 
 ## 常见问题
@@ -400,4 +397,4 @@ curl -X POST "http://localhost:8080/api/config/refresh" \
 - 启动报错 `JWT secret must be at least 32 characters`：请设置长度不少于 32 的 `SECURITY_JWT_SECRET`
 - 报错 `type "vector" does not exist`：数据库未启用 `pgvector`
 - 上传失败：仅支持 `PDF/DOCX/PPTX/XLSX/TXT/MD/HTML/CSV` 且默认大小不超过 50MB
-- `/api/system/status` 或 `/api/system/boundary` 返回 401：这两个接口不是公开接口，需要先登录
+- `/api/system/status` 返回 401：该接口不是公开接口，需要先登录
