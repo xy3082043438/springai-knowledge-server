@@ -1,0 +1,10 @@
+.git
+.idea
+.mvn
+target
+data
+HELP.md
+README.md
+mvnw
+mvnw.cmd
+*.iml
