@@ -1,0 +1,31 @@
+package com.lamb.springaiknowledgeserver.modules.aiqa.feedback;
+
+import com.lamb.springaiknowledgeserver.modules.aiqa.feedback.QaFeedback;
+import java.time.Instant;
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface QaFeedbackRepository extends JpaRepository<QaFeedback, Long> {
+
+    @Query("""
+        select f from QaFeedback f
+        where (:userId is null or f.userId = :userId)
+          and (f.createdAt >= coalesce(:from, f.createdAt))
+          and (f.createdAt <= coalesce(:to, f.createdAt))
+        order by f.createdAt desc
+        """)
+    Page<QaFeedback> search(
+        @Param("userId") Long userId,
+        @Param("from") Instant from,
+        @Param("to") Instant to,
+        Pageable pageable
+    );
+
+    Optional<QaFeedback> findByQaLogIdAndUserId(Long qaLogId, Long userId);
+}
+
+
