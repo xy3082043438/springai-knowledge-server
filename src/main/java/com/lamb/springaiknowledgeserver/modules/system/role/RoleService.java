@@ -47,7 +47,7 @@ public class RoleService {
 
     public Role getById(Long id) {
         return roleRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "角色不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法完成操作，您指定的角色似乎不存在"));
     }
 
     public RoleResponse getResponseById(Long id) {
@@ -57,7 +57,7 @@ public class RoleService {
     public Role create(RoleCreateRequest request) {
         String roleName = normalizeRoleName(request.getName());
         if (roleRepository.existsByName(roleName)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该角色名称已存在");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该角色名称已存在，请选择一个不同的名称");
         }
         Role role = new Role();
         role.setName(roleName);
@@ -70,10 +70,10 @@ public class RoleService {
         if (request.getName() != null) {
             String roleName = normalizeRoleName(request.getName());
             if (isSystemRole(role.getName()) && !roleName.equals(role.getName())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "系统内置角色名称不可修改");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "抱歉，系统内置角色的名称受保护，无法修改");
             }
             if (!roleName.equals(role.getName()) && roleRepository.existsByName(roleName)) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Role already exists");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "该角色名称已存在，请选择一个不同的名称");
             }
             role.setName(roleName);
         }
@@ -86,15 +86,15 @@ public class RoleService {
     public void delete(Long id) {
         Role role = getById(id);
         if (isSystemRole(role.getName())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "系统内置角色不可删除");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "抱歉，系统内置角色受到保护，无法删除");
         }
         long userCount = userRepository.countByRole_Id(id);
         if (userCount > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该角色下还有关联用户，请先移除");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "无法删除角色，该角色下还有关联用户，请先移除");
         }
         long documentCount = documentRepository.countByAllowedRoleId(id);
         if (documentCount > 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该角色下还有关联文档，请先移除");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "无法删除角色，该角色下还有关联文档，请先移除");
         }
         roleRepository.delete(role);
     }
@@ -102,7 +102,7 @@ public class RoleService {
     public RoleResponse toResponse(Role role) {
         Long roleId = role.getId();
         if (roleId == null) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "角色数据异常，请联系管理员");
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "角色数据出现异常，请联系管理员处理");
         }
         long userCount = userRepository.countByRole_Id(roleId);
         long documentCount = documentRepository.countByAllowedRoleId(roleId);
@@ -118,11 +118,11 @@ public class RoleService {
 
     private String normalizeRoleName(String roleName) {
         if (roleName == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请输入角色名称");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "角色名称不能为空，请填写");
         }
         String normalized = roleName.trim();
         if (normalized.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "角色名称不能为空");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "角色名称不能为空，请填写后重试");
         }
         return normalized;
     }

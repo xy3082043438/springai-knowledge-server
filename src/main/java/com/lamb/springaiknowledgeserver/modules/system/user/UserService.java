@@ -28,12 +28,12 @@ public class UserService {
 
     public User getById(Long id) {
         return userRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "抱歉，未找到该用户信息，可能已被移除"));
     }
 
     public User createUser(UserCreateRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被使用，请换一个");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被其他用户注册，请尝试使用其他名称");
         }
         Role role = resolveRole(request.getRole());
         User user = new User();
@@ -48,7 +48,7 @@ public class UserService {
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             if (!request.getUsername().equals(user.getUsername())
                 && userRepository.existsByUsername(request.getUsername())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被使用，请换一个");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被其他用户注册，请尝试使用其他名称");
             }
             user.setUsername(request.getUsername());
         }
@@ -63,7 +63,7 @@ public class UserService {
         if (request.getUsername() != null && !request.getUsername().isBlank()) {
             if (!request.getUsername().equals(user.getUsername())
                 && userRepository.existsByUsername(request.getUsername())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被使用，请换一个");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "该用户名已被其他用户注册，请尝试使用其他名称");
             }
             user.setUsername(request.getUsername());
         }
@@ -72,7 +72,7 @@ public class UserService {
 
     public void deleteUser(Long id, Long currentUserId) {
         if (id != null && id.equals(currentUserId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不能删除当前登录的用户");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "安全提示：您不能删除当前正在登录的账号");
         }
         User user = getById(id);
         userRepository.delete(user);
@@ -81,7 +81,7 @@ public class UserService {
     private Role resolveRole(String roleName) {
         String effectiveName = (roleName == null || roleName.isBlank()) ? "USER" : roleName;
         return roleRepository.findByName(effectiveName)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "指定的角色不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "无法完成操作，您指定的角色似乎不存在"));
     }
 }
 

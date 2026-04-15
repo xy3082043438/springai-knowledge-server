@@ -70,7 +70,7 @@ public class QaService {
             chunks = hybridSearchService.search(roleName, question);
             chunks = rerankService.rerank(question, chunks);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索知识库信息时发生异常，请稍后重试", ex);
         }
         List<DocumentResponse> documents = List.of();
         List<QaSourceResponse> sources = List.of();
@@ -91,9 +91,9 @@ public class QaService {
                 .content();
         } catch (Exception ex) {
             if (isTimeoutException(ex)) {
-                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "模型调用超时，请稍后重试", ex);
+                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "大模型思考超时，由于当前并发量较高，请您稍后再试", ex);
             }
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "模型调用失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "连接大模型服务时发生网络波动，请联系系统管理员进行排查", ex);
         }
         if (answer == null || answer.isBlank()) {
             answer = DEFAULT_NO_ANSWER;
@@ -112,7 +112,7 @@ public class QaService {
             chunks = hybridSearchService.search(roleName, question);
             chunks = rerankService.rerank(question, chunks);
         } catch (Exception ex) {
-            return Flux.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索失败", ex));
+            return Flux.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索知识库信息时发生异常，请稍后重试", ex));
         }
 
         if (chunks.isEmpty()) {
@@ -147,9 +147,9 @@ public class QaService {
                 return Flux.just(new QaResponse(null, documents, sources, qaLogId));
             })).onErrorResume(ex -> {
                 if (isTimeoutException(ex)) {
-                    return Flux.error(new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "模型调用超时，请稍后重试", ex));
+                    return Flux.error(new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "大模型思考超时，由于当前并发量较高，请您稍后再试", ex));
                 }
-                return Flux.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "模型调用失败", ex));
+                return Flux.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "连接大模型服务时发生网络波动，请联系系统管理员进行排查", ex));
             });
     }
 

@@ -116,13 +116,22 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, "无权限访问", request);
     }
 
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleBadCredentials(
+        org.springframework.security.authentication.BadCredentialsException ex,
+        HttpServletRequest request
+    ) {
+        log.debug("Bad credentials", ex);
+        return build(HttpStatus.UNAUTHORIZED, "用户名或密码错误", request);
+    }
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiErrorResponse> handleAuthentication(
         AuthenticationException ex,
         HttpServletRequest request
     ) {
         log.debug("Authentication failed", ex);
-        return build(HttpStatus.UNAUTHORIZED, "用户名或密码错误", request);
+        return build(HttpStatus.UNAUTHORIZED, "登录已过期，请重新登录", request);
     }
 
     @ExceptionHandler(HttpMessageNotWritableException.class)

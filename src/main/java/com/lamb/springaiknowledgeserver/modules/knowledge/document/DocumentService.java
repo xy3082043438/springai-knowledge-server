@@ -100,7 +100,7 @@ public class DocumentService {
     @Transactional
     public Document upload(MultipartFile file, String title, Collection<String> roleNames) {
         if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传文件");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未检测到文件，请先选择需要上传的文件");
         }
         String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String safeName = originalName.replaceAll("[\\\\/]+", "_");
@@ -125,7 +125,7 @@ public class DocumentService {
     @Transactional
     public Document update(Long id, DocumentUpdateRequest request) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
         boolean contentChanged = false;
         boolean titleChanged = false;
         boolean rolesChanged = false;
@@ -160,9 +160,9 @@ public class DocumentService {
     @Transactional
     public Document replaceFile(Long id, MultipartFile file, String title, Collection<String> roleNames) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
         if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请上传文件");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未检测到文件，请先选择需要上传的文件");
         }
         String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
         String safeName = originalName.replaceAll("[\\\\/]+", "_");
@@ -195,7 +195,7 @@ public class DocumentService {
     @Transactional
     public void delete(Long id) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
         deleteFileIfExists(document.getStoragePath());
         List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(id);
         deleteVectors(id, existing);
@@ -213,25 +213,25 @@ public class DocumentService {
 
     public Document getVisibleById(Long id, String roleName) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取该文档，可能已被删除"));
         if (hasRoleAccess(document, roleName)) {
             return document;
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "抱歉，您当前没有访问该文档的权限");
     }
 
     @Transactional(readOnly = true)
     public DocumentChunkPreviewResponse getChunkPreview(Long chunkId, String roleName) {
         DocumentChunk chunk = documentChunkRepository.findById(chunkId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "片段不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无权限访问，或者该知识片段已被删除"));
         Document document = chunk.getDocument();
         if (document == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "抱歉，您当前没有访问该文档的权限");
         }
         if (hasRoleAccess(document, roleName)) {
             return DocumentChunkPreviewResponse.from(chunk);
         }
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问文档");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "抱歉，您当前没有访问该文档的权限");
     }
 
     @Transactional
@@ -256,7 +256,7 @@ public class DocumentService {
     @Transactional
     public DocumentReindexResponse reindexOne(Long id) {
         Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
         rebuildForDocument(document);
         return new DocumentReindexResponse(1, 1, 0, List.of());
     }
@@ -420,7 +420,7 @@ public class DocumentService {
             file.transferTo(target);
             return target;
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件保存失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "服务器在保存文件时遇到问题，请稍后重试", ex);
         }
     }
 
@@ -431,7 +431,7 @@ public class DocumentService {
         try {
             Files.deleteIfExists(Paths.get(path));
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "文件删除失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "服务器在删除文件时遇到问题", ex);
         }
     }
 
@@ -439,7 +439,7 @@ public class DocumentService {
         try {
             return extractContent(file.getBytes(), fileType);
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文件失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "无法读取您的文件内容，请检查文件是否损坏", ex);
         }
     }
 
@@ -454,7 +454,7 @@ public class DocumentService {
         try {
             return extractContent(Files.readAllBytes(Paths.get(document.getStoragePath())), fileType);
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "读取文件失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "无法读取您的文件内容，请检查文件是否损坏", ex);
         }
     }
 
@@ -482,7 +482,7 @@ public class DocumentService {
             }
             return new ParsedContent(joinPages(pages), pages);
         } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败，文件内容格式可能异常", ex);
         }
     }
 
@@ -491,7 +491,7 @@ public class DocumentService {
              XWPFWordExtractor extractor = new XWPFWordExtractor(doc)) {
             return new ParsedContent(extractor.getText(), null);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 DOCX 失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 Word 文档失败", ex);
         }
     }
 
@@ -504,7 +504,7 @@ public class DocumentService {
             }
             return new ParsedContent(joinPages(pages), pages);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PPTX 失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PPT 演示文稿失败", ex);
         }
     }
 
@@ -549,7 +549,7 @@ public class DocumentService {
             }
             return new ParsedContent(joinPages(pages), pages);
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 XLSX 失败", ex);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 Excel 表格失败", ex);
         }
     }
 
@@ -674,7 +674,7 @@ public class DocumentService {
                 }
             }
         }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅支持 " + SUPPORTED_UPLOAD_TYPES + " 文件");
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "抱歉，当前仅支持 " + SUPPORTED_UPLOAD_TYPES + " 格式的文件");
     }
 
     private DocumentFileType resolveStoredFileType(String contentType) {
@@ -754,7 +754,7 @@ public class DocumentService {
 
     private Set<Role> resolveRoles(Collection<String> roleNames) {
         if (roleNames == null || roleNames.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须指定可访问角色");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须为该文档至少分配一个可访问的角色");
         }
         Set<String> normalized = new HashSet<>();
         for (String name : roleNames) {
@@ -763,11 +763,11 @@ public class DocumentService {
             }
         }
         if (normalized.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须指定可访问角色");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "必须为该文档至少分配一个可访问的角色");
         }
         Collection<Role> roles = roleRepository.findByNameIn(normalized);
         if (roles.size() != normalized.size()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "角色不存在");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "分配了无效的角色，请检查角色是否已被删除");
         }
         return new HashSet<>(roles);
     }

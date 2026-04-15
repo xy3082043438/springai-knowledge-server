@@ -62,7 +62,7 @@ public class SystemConfigController {
         HttpServletRequest httpRequest
     ) {
         SystemConfig config = systemConfigService.findByKey(key)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "配置不存在"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取，该配置项可能已被移除"));
         SystemConfigResponse response = SystemConfigResponse.from(config);
         operationLogService.log(
             principal.getId(),
