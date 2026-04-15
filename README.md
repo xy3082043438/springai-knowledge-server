@@ -1,94 +1,90 @@
-# SpringAI Knowledge Server (企业知识库后端)
+# SpringAI Knowledge Server (企业级知识库后端)
 
-> 基于 Spring Boot、Spring AI 和 PostgreSQL pgvector 向量数据库打造的企业级知识库后端服务。
-> 支持多种文档格式解析、混合检索、可选重排（Rerank）、RAG 智能问答、以及完善的 RBAC 权限体系与系统监控。
+> 基于 **Spring Boot 4.x**、**Spring AI** 与 **PostgreSQL (pgvector)** 打造的高性能、企业级 RAG (Retrieval-Augmented Generation) 知识库后端服务。
+> 提供极速的文档解析、多模态混合检索、语义重排（Rerank）以及完善的 RBAC 权限管理体系。
 
-## ✨ 核心特性
+---
 
-- 🔐 **安全与权限**: 基于 Spring Security 和 JWT 实现的无状态鉴权，提供细粒度的 RBAC（用户-角色-权限）控制，支持 Token 吊销机制。
-- 📄 **多格式文档解析**: 支持 `PDF`, `DOCX`, `PPTX`, `XLSX`, `TXT`, `MD`, `HTML`, `CSV` 等多种格式上传。
-- 🔍 **智能检索**: 
-  - **向量检索 + 全文检索** 的混合加权融合机制。
-  - 支持调用 **SiliconFlow** 进行文档片段的二次重排（Rerank），提升召回准确率。
-- 🤖 **大模型 RAG 问答**: 对接触发大模型接口生成精准答案，提供引用参考文档段落与页面偏移，提高可解释性。
-- 📊 **系统审计与监控**: 全面的操作日志、问答日志、反馈收集，搭配 Spring Boot Actuator 提供全方位监控。
-- ⚙️ **动态配置热刷新**: 核心参数与 API Key 持久化在数据库中，支持控制台在线动态修改和热插拔。
-- 📖 **API 开放文档**: 内置基于 `springdoc-openapi` 的 Swagger UI 页面。
+## 🚀 核心特性
 
-## 🛠 技术栈
+- 🛡️ **安全与审计**: 
+  - 基于 **Spring Security** & **JWT** 的无状态鉴权。
+  - 细粒度的 **RBAC** 权限模型（用户-角色-权限）。
+  - 全量的操作日志与 AI 问答日志追踪。
+- 📄 **多格式文档中台**: 
+  - 支持 `PDF`, `DOCX`, `PPTX`, `XLSX`, `TXT`, `MD`, `HTML`, `CSV`。
+  - 异步文档解析引擎，通过 **RabbitMQ** 实现削峰填谷。
+- 🔍 **智能检索引擎**:
+  - **混合搜索 (Hybrid Search)**: 向量检索（Semantic）与全文检索（Keyword）的加权融合。
+  - **重排优化 (Rerank)**: 接驳 **SiliconFlow** 进行文档片段二次打分，显著提升回答准确率。
+- 🤖 **大模型 RAG 闭环**:
+  - 深度集成 **Spring AI**，支持流式 (SSE) 与同步响应。
+  - 精准的文档来源溯源（引用参考段落与页面偏移）。
+- 📊 **系统监控**:
+  - 集成 **Spring Boot Actuator**。
+  - 提供实时系统状态、文档分布、Q&A 趋势等数据的聚合接口。
+- ⚙️ **动态运维**:
+  - 检索权重、大模型参数、向量切分阈值等核心配置支持在线热更新。
 
-- **核心框架**: Java 21, Spring Boot 4.0.3
+---
+
+## 🛠 技术深度栈
+
+- **核心引擎**: Java 21 / Spring Boot 4.0.3
 - **AI 编排**: Spring AI 2.0.0-M2
-- **数据层**: Spring Data JPA, PostgreSQL 15+ (`pgvector` 扩展)
-- **安全与工具**: Spring Security, JWT (`jjwt`), Lombok, PDFBox, Apache POI, jsoup, springdoc-openapi
+- **向量数据库**: PostgreSQL 15+ (`pgvector` expansion)
+- **消息队列**: RabbitMQ (用于文档异步解析)
+- **大模型支持**: SiliconFlow (默认模型: Qwen3-14B, bge-large-zh, bge-reranker)
+- **API 文档**: SpringDoc OpenAPI 3.0 (Swagger UI)
+- **工具链**: Maven, Docker, Lombok, Jackson
 
-## 🚀 快速启动
+---
 
-### 1. 环境准备
+## 📦 快速部署
 
-- [Java 21](https://jdk.java.net/21/)
-- [PostgreSQL 15+](https://www.postgresql.org/) (必须安装并启用 `pgvector` 插件)
-- 大模型 API 密钥 (默认使用 SiliconFlow，兼容 OpenAI API)
+### 1. 环境依赖
+- **JDK 21**
+- **PostgreSQL 15+** (需安装并启用 `vector` 扩展)
+- **RabbitMQ 3.x+**
+- **SiliconFlow API Key**
 
-数据库初始化脚本：
-
+### 2. 数据库准备
 ```sql
 CREATE DATABASE springai_knowledge;
 \c springai_knowledge;
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### 2. 核心配置与环境变量
+### 3. 配置说明
+主要环境变量（可在 `application.yml` 或系统环境变量中配置）：
+- `PG_PASSWORD`: 数据库密码
+- `RABBITMQ_PASSWORD`: RabbitMQ 密码
+- `SILICONFLOW_API_KEY`: SiliconFlow 凭据
+- `SECURITY_JWT_SECRET`: JWT 签名密钥（生产环境务必修改）
 
-项目启动前需要配置以下环境变量或在 `application.yml` 中修改：
-
-| 变量名 | 必填 | 说明 |
-| --- | --- | --- |
-| `PG_PASSWORD` | 是 | PostgreSQL 数据库密码 |
-| `SILICONFLOW_API_KEY` | 是 | Chat/Embedding/Rerank 等大模型调用的 API 凭据 |
-| `SECURITY_JWT_SECRET` | 建议 | JWT 签名密钥 (至少32位)，生产环境务必替换 |
-| `APP_ADMIN_USERNAME` | 否 | 系统初始管理员账号，默认: `admin` |
-| `APP_ADMIN_PASSWORD` | 否 | 系统初始管理员密码，默认: `admin123` |
-| `APP_DOCUMENT_STORAGE_PATH` | 否 | 上传文件本地落盘目录，默认: `./data/documents` |
-
-**示例 (PowerShell / Bash):**
+### 4. 编译与运行
 ```bash
-export PG_PASSWORD="your_db_password"
-export SILICONFLOW_API_KEY="your_ai_api_key"
-export SECURITY_JWT_SECRET="replace_with_your_super_secret_key"
-```
-
-### 3. 构建与运行
-
-Windows:
-```powershell
-.\mvnw.cmd clean package -DskipTests
-java -jar target/springai-knowledge-server-0.0.1.jar
-```
-
-Linux / macOS:
-```bash
+# 构建项目
 ./mvnw clean package -DskipTests
+
+# 运行服务
 java -jar target/springai-knowledge-server-0.0.1.jar
 ```
-
-### 4. 服务入口
-
-- **API 基地址**: `http://localhost:8080`
-- **Swagger UI API 文档**: `http://localhost:8080/swagger-ui/index.html`
-- **健康检查**: `http://localhost:8080/actuator/health`
-
-首次启动后，系统将自动执行以下操作：
-1. 自动执行表结构设计（JPA ddl-auto）。
-2. 构建 `ADMIN` 与 `USER` 角色并授权。
-3. 创建默认管理员用户 ( `admin` / `admin123` )。
 
 ---
 
-## 📚 主要业务流程
+## 📖 开发者向导
 
-1. **文档摄入**: 用户上传各类企业文档（如操作手册、规章制度）。系统利用 PDFBox/POI 等工具抽取文本，通过 Spring AI 进行 Chunk 切块。
-2. **向量化录入**: 将 Chunk 基于 Embedding 模型向量化，并与 metadata 存入 `app_document_chunk` 及 `pgvector` 向量表。
-3. **混合检索**: 用户发起提问时，同时执行向量检索与 PG 全文索引检索，两路召回结果按配置的权重合并。
-4. **重排 (Rerank)**: 如开启重排，将混合检索结果交给大模型的 Rerank API 重新打分排序。
-5. **LLM 响应产生**: 根据排序后的最佳片段作为 Context，组合 Prompt 后交由 Chat 模型生成答案，并流式或同步返回给前台。
+- **Swagger UI**: `http://localhost:8080/swagger-ui/index.html`
+- **健康检查**: `http://localhost:8080/actuator/health`
+- **默认管理员**: `admin` / `admin123`
+
+---
+
+## 📂 项目模块结构
+
+- `core`: 核心配置、异常处理、通用工具及初始化引导。
+- `security`: 安全认证与 JWT 核心逻辑。
+- `modules.knowledge`: 文档管理、解析引擎、向量化调度。
+- `modules.aiqa`: 智能问答、混合检索、Rerank、反馈机制。
+- `modules.system`: 用户/角色管理、系统配置、监控看板数据、日志审计。
