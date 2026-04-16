@@ -20,12 +20,14 @@ public class UserPrincipal implements UserDetails {
     private final long id;
     private final String username;
     private final String password;
+    private final boolean enabled;
     private final List<GrantedAuthority> authorities;
 
-    private UserPrincipal(long id, String username, String password, List<GrantedAuthority> authorities) {
+    private UserPrincipal(long id, String username, String password, boolean enabled, List<GrantedAuthority> authorities) {
         this.id = id;
         this.username = username;
         this.password = password;
+        this.enabled = enabled;
         this.authorities = authorities;
     }
 
@@ -36,6 +38,7 @@ public class UserPrincipal implements UserDetails {
             id,
             user.getUsername(),
             user.getPasswordHash(),
+            user.isEnabled(),
             authorities
         );
     }
@@ -62,7 +65,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return enabled;
     }
 
     @Override

@@ -25,6 +25,8 @@ public interface QaFeedbackRepository extends JpaRepository<QaFeedback, Long> {
         Pageable pageable
     );
 
+    void deleteAllByCreatedAtBefore(Instant time);
+
     Optional<QaFeedback> findByQaLogIdAndUserId(Long qaLogId, Long userId);
 }
 

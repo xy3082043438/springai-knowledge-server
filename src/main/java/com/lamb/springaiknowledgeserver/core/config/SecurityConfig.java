@@ -65,7 +65,8 @@ public class SecurityConfig {
                     "/api/auth/captcha",
                     "/swagger-ui/**",
                     "/v3/api-docs/**",
-                    "/actuator/health"
+                    "/actuator/health",
+                    "/uploads/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

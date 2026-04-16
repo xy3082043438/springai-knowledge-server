@@ -58,9 +58,19 @@ public class DataInitializer implements ApplicationRunner {
             admin.setPasswordHash(passwordEncoder.encode(adminPassword));
             admin.setRole(adminRole);
             userRepository.save(admin);
-        } else if (admin.getRole() == null) {
-            admin.setRole(adminRole);
-            userRepository.save(admin);
+        } else {
+            boolean changed = false;
+            if (admin.getRole() == null) {
+                admin.setRole(adminRole);
+                changed = true;
+            }
+            if (!admin.isEnabled()) {
+                admin.setEnabled(true);
+                changed = true;
+            }
+            if (changed) {
+                userRepository.save(admin);
+            }
         }
     }
 

@@ -12,6 +12,8 @@ public class UserResponse {
     private Long id;
     private String username;
     private String role;
+    private String avatar;
+    private boolean enabled;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -20,6 +22,8 @@ public class UserResponse {
             user.getId(),
             user.getUsername(),
             user.getRole().getName(),
+            user.getAvatar(),
+            user.isEnabled(),
             user.getCreatedAt(),
             user.getUpdatedAt()
         );

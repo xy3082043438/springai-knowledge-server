@@ -41,6 +41,12 @@ public class User {
     @Column(nullable = false)
     private int tokenVersion = 0;
 
+    @Column(length = 512)
+    private String avatar;
+
+    @Column(columnDefinition = "boolean default true")
+    private boolean enabled = true;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

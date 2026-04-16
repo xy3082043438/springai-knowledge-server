@@ -26,6 +26,8 @@ public interface QaLogRepository extends JpaRepository<QaLog, Long> {
         Pageable pageable
     );
 
+    void deleteAllByCreatedAtBefore(Instant time);
+
     @Query("""
         select l.createdAt as createdAt, l.question as question
         from QaLog l

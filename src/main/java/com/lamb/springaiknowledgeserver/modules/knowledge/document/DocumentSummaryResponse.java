@@ -19,6 +19,7 @@ public class DocumentSummaryResponse {
     private String contentType;
     private long fileSize;
     private DocumentStatus status;
+    private String errorMessage;
     private Set<String> allowedRoles;
     private Instant createdAt;
     private Instant updatedAt;
@@ -31,6 +32,7 @@ public class DocumentSummaryResponse {
             document.getContentType(),
             document.getFileSize(),
             document.getStatus(),
+            document.getErrorMessage(),
             document.getAllowedRoles().stream().map(Role::getName).collect(Collectors.toSet()),
             document.getCreatedAt(),
             document.getUpdatedAt()

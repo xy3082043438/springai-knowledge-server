@@ -23,6 +23,8 @@ public interface OperationLogRepository extends JpaRepository<OperationLog, Long
         @Param("endTime") Instant endTime,
         Pageable pageable
     );
+
+    void deleteAllByCreatedAtBefore(Instant time);
 }
 
 

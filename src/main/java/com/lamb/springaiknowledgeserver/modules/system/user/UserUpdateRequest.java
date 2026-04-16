@@ -13,6 +13,8 @@ public class UserUpdateRequest {
 
     @Size(max = 64)
     private String role;
+
+    private Boolean enabled;
 }
 
 

@@ -10,6 +10,9 @@ public class MeUpdateRequest {
 
     @Size(min = 3, max = 64)
     private String username;
+
+    @Size(max = 512)
+    private String avatar;
 }
 
 

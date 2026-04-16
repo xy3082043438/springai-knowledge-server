@@ -55,6 +55,9 @@ public class Document {
     @Column(nullable = false, length = 20)
     private DocumentStatus status = DocumentStatus.READY;
 
+    @Column(columnDefinition = "text")
+    private String errorMessage;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "app_document_role",

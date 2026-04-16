@@ -2,6 +2,7 @@ package com.lamb.springaiknowledgeserver.modules.system.user;
 
 import com.lamb.springaiknowledgeserver.security.auth.UserPrincipal;
 import com.lamb.springaiknowledgeserver.modules.system.user.MeUpdateRequest;
+import com.lamb.springaiknowledgeserver.modules.system.user.PasswordUpdateRequest;
 import com.lamb.springaiknowledgeserver.modules.system.user.UserCreateRequest;
 import com.lamb.springaiknowledgeserver.modules.system.user.UserResponse;
 import com.lamb.springaiknowledgeserver.modules.system.user.UserUpdateRequest;
@@ -70,6 +71,26 @@ public class UserController {
             true
         );
         return UserResponse.from(user);
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> updatePassword(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @Valid @RequestBody PasswordUpdateRequest request,
+        HttpServletRequest httpRequest
+    ) {
+        userService.updatePassword(principal.getId(), request);
+        operationLogService.log(
+            principal.getId(),
+            principal.getUsername(),
+            "USER_PASSWORD_UPDATE",
+            "USER",
+            String.valueOf(principal.getId()),
+            "update password",
+            RequestUtils.resolveClientIp(httpRequest),
+            true
+        );
+        return ResponseEntity.ok().build();
     }
 
     @PreAuthorize("hasAuthority('USER_READ')")

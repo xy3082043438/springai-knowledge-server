@@ -55,6 +55,12 @@ public class UserService {
         if (request.getRole() != null && !request.getRole().isBlank()) {
             user.setRole(resolveRole(request.getRole()));
         }
+        if (request.getEnabled() != null) {
+            if (!request.getEnabled() && "admin".equals(user.getUsername())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "超级管理员账号不可被停用");
+            }
+            user.setEnabled(request.getEnabled());
+        }
         return userRepository.save(user);
     }
 
@@ -67,7 +73,19 @@ public class UserService {
             }
             user.setUsername(request.getUsername());
         }
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
         return userRepository.save(user);
+    }
+
+    public void updatePassword(Long id, PasswordUpdateRequest request) {
+        User user = getById(id);
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "原密码不正确");
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 
     public void deleteUser(Long id, Long currentUserId) {
