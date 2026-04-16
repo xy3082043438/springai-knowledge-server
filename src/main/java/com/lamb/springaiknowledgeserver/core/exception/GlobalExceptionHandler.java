@@ -29,6 +29,15 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(ServiceException.class)
+    public ResponseEntity<ApiErrorResponse> handleService(
+        ServiceException ex,
+        HttpServletRequest request
+    ) {
+        log.debug("Service error: {}", ex.getMessage());
+        return build(ex.getStatus(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiErrorResponse> handleResponseStatus(
         ResponseStatusException ex,

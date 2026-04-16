@@ -43,6 +43,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentRepository documentRepository;
     private final UserService userService;
     private final OperationLogService operationLogService;
 
@@ -280,6 +281,30 @@ public class DocumentController {
             true
         );
         return response;
+    }
+
+    @PreAuthorize("hasAuthority('DOC_READ')")
+    @GetMapping("/{id}/file")
+    public ResponseEntity<org.springframework.core.io.Resource> getFile(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @PathVariable Long id
+    ) {
+        String roleName = resolveRoleName(principal);
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
+
+        System.out.println("DEBUG: Requesting file preview for ID=" + id);
+        System.out.println("DEBUG: Document Storage Path in DB=" + document.getStoragePath());
+        
+        org.springframework.core.io.Resource resource = documentService.getFileAsResource(id, roleName);
+        
+        String encodedFileName = java.net.URLEncoder.encode(document.getFileName(), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        String contentDisposition = "inline; filename*=UTF-8''" + encodedFileName;
+        
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(document.getContentType() != null ? document.getContentType() : "application/octet-stream"))
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
+            .body(resource);
     }
 
     private String resolveRoleName(UserPrincipal principal) {

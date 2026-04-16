@@ -234,6 +234,39 @@ public class DocumentService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "抱歉，您当前没有访问该文档的权限");
     }
 
+    public org.springframework.core.io.Resource getFileAsResource(Long id, String roleName) {
+        Document document = documentRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取该文档"));
+        
+        if (!hasRoleAccess(document, roleName)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "抱歉，您当前没有访问该文档的权限");
+        }
+
+        String storedPath = document.getStoragePath();
+        if (storedPath == null || storedPath.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该文档没有关联的原始文件");
+        }
+
+        Path path = Paths.get(storedPath);
+        if (!Files.exists(path)) {
+            log.warn("File not found at stored path: {}. Attempting fallback to configured storage path.", storedPath);
+            try {
+                String fileName = path.getFileName().toString();
+                Path safeStoragePath = Paths.get(storagePath).toAbsolutePath().normalize();
+                Path fallbackPath = safeStoragePath.resolve(fileName);
+                if (Files.exists(fallbackPath)) {
+                    log.info("Found file at fallback path: {}", fallbackPath);
+                    return new org.springframework.core.io.FileSystemResource(fallbackPath);
+                }
+            } catch (Exception e) {
+                log.error("Fallback path resolution failed", e);
+            }
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "原始文件已丢失，请尝试重新上传。路径：" + storedPath);
+        }
+
+        return new org.springframework.core.io.FileSystemResource(path);
+    }
+
     @Transactional
     public DocumentReindexResponse reindexAll() {
         List<Document> documents = documentRepository.findAll();
