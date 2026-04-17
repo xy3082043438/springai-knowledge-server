@@ -22,7 +22,7 @@ public class DashboardController {
     private final DashboardService dashboardService;
     private final OperationLogService operationLogService;
 
-    @PreAuthorize("hasAuthority('LOG_READ')")
+    @PreAuthorize("hasAuthority('DASHBOARD_READ')")
     @GetMapping
     public DashboardResponse getDashboard(
         @AuthenticationPrincipal UserPrincipal principal,

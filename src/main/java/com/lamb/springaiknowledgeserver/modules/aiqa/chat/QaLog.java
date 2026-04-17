@@ -18,6 +18,7 @@ import lombok.Setter;
     name = "app_qa_log",
     indexes = {
         @Index(name = "idx_qalog_user", columnList = "user_id"),
+        @Index(name = "idx_qalog_session", columnList = "session_id"),
         @Index(name = "idx_qalog_created", columnList = "created_at")
     }
 )
@@ -32,6 +33,9 @@ public class QaLog {
 
     @Column(name = "user_id")
     private Long userId;
+
+    @Column(name = "session_id")
+    private Long sessionId;
 
     @Column(name = "username", length = 120)
     private String username;

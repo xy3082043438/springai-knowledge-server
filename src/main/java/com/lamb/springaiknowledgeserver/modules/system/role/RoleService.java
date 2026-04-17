@@ -161,13 +161,22 @@ public class RoleService {
                 permission.name(), "LOG", "日志", "查看日志", "允许查看操作日志、问答日志和数据大屏"
             );
             case LOG_WRITE -> new PermissionOptionResponse(
-                permission.name(), "LOG", "日志", "管理日志", "允许执行日志维护类操作"
+                permission.name(), "LOG", "日志", "管理日志", "允许执行日志清理和维护操作"
+            );
+            case LOG_EXPORT -> new PermissionOptionResponse(
+                permission.name(), "LOG", "日志", "导出日志", "允许将操作日志和问答日志导出为 Excel 文件"
             );
             case FEEDBACK_READ -> new PermissionOptionResponse(
                 permission.name(), "FEEDBACK", "反馈", "查看反馈", "允许查看问答反馈记录"
             );
             case FEEDBACK_WRITE -> new PermissionOptionResponse(
-                permission.name(), "FEEDBACK", "反馈", "处理反馈", "允许提交和处理问答反馈"
+                permission.name(), "FEEDBACK", "反馈", "处理反馈", "允许提交和审核问答反馈"
+            );
+            case DASHBOARD_READ -> new PermissionOptionResponse(
+                permission.name(), "DASHBOARD", "看板", "查看概览", "允许查看系统运行数据大屏和统计图表"
+            );
+            case QA_READ -> new PermissionOptionResponse(
+                permission.name(), "QA", "智答", "提问咨询", "开启与 AI 助手的对话能力及获取常见问题建议"
             );
         };
     }

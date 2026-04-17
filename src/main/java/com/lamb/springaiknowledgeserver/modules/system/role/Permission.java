@@ -11,8 +11,11 @@ public enum Permission {
     CONFIG_WRITE,
     LOG_READ,
     LOG_WRITE,
+    LOG_EXPORT,
     FEEDBACK_READ,
-    FEEDBACK_WRITE
+    FEEDBACK_WRITE,
+    DASHBOARD_READ,
+    QA_READ
 }
 
 

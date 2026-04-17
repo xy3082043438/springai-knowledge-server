@@ -12,6 +12,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     @Query("select distinct d from Document d join d.allowedRoles r where r.name in :roleNames")
     List<Document> findVisibleByRoles(@Param("roleNames") Collection<String> roleNames);
 
+    @Query("select distinct d from Document d join d.allowedRoles r where r.name in :roleNames and d.status = 'READY' order by d.updatedAt desc")
+    List<Document> findVisibleByRolesOrderByUpdatedAtDesc(@Param("roleNames") Collection<String> roleNames, org.springframework.data.domain.Pageable pageable);
+
     @Query("""
         select distinct d from Document d
         join d.allowedRoles r

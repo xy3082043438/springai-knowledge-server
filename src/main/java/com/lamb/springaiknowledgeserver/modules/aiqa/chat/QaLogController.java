@@ -44,7 +44,7 @@ public class QaLogController {
         ).map(QaLogResponse::from));
     }
 
-    @PreAuthorize("hasAuthority('LOG_READ')")
+    @PreAuthorize("hasAuthority('LOG_EXPORT')")
     @GetMapping("/export")
     public org.springframework.http.ResponseEntity<byte[]> export(
         @RequestParam(value = "userId", required = false) Long userId,

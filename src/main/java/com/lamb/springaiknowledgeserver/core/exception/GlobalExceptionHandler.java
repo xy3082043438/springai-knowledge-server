@@ -162,8 +162,10 @@ public class GlobalExceptionHandler {
             log.debug("Client disconnected before response completed [{}]", requestUri(request));
             return ResponseEntity.noContent().build();
         }
-        log.error("Unhandled exception", ex);
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "服务异常，请稍后重试", request);
+        log.error("Unhandled exception: {} - {}", ex.getClass().getSimpleName(), ex.getMessage(), ex);
+        // Temporarily exposing error details to help debugging
+        String detailMessage = "服务异常: " + ex.getClass().getSimpleName() + " (" + ex.getMessage() + ")";
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, detailMessage, request);
     }
 
     private ResponseEntity<ApiErrorResponse> build(

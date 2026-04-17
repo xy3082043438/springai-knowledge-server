@@ -61,7 +61,7 @@ public class OperationLogController {
         ).map(OperationLogResponse::from));
     }
 
-    @PreAuthorize("hasAuthority('LOG_READ')")
+    @PreAuthorize("hasAuthority('LOG_EXPORT')")
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(
         @RequestParam(value = "userId", required = false) Long userId,

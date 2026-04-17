@@ -13,7 +13,5 @@ public class QaResponse {
     private List<DocumentResponse> documents;
     private List<QaSourceResponse> sources;
     private Long qaLogId;
+    private Long sessionId;
 }
-
-
-

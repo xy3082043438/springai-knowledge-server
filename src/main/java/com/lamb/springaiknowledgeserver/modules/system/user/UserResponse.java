@@ -2,6 +2,8 @@ package com.lamb.springaiknowledgeserver.modules.system.user;
 
 import com.lamb.springaiknowledgeserver.modules.system.user.User;
 import java.time.Instant;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
@@ -14,6 +16,7 @@ public class UserResponse {
     private String role;
     private String avatar;
     private boolean enabled;
+    private Set<String> permissions;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -24,6 +27,7 @@ public class UserResponse {
             user.getRole().getName(),
             user.getAvatar(),
             user.isEnabled(),
+            user.getRole().getPermissions().stream().map(Enum::name).collect(Collectors.toSet()),
             user.getCreatedAt(),
             user.getUpdatedAt()
         );

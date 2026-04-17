@@ -45,11 +45,19 @@ public class DataInitializer implements ApplicationRunner {
                 Permission.CONFIG_WRITE,
                 Permission.LOG_READ,
                 Permission.LOG_WRITE,
+                Permission.LOG_EXPORT,
                 Permission.FEEDBACK_READ,
-                Permission.FEEDBACK_WRITE
+                Permission.FEEDBACK_WRITE,
+                Permission.DASHBOARD_READ,
+                Permission.QA_READ
             )
         );
-        ensureRole("USER", EnumSet.of(Permission.DOC_READ, Permission.FEEDBACK_WRITE));
+        ensureRole("USER", EnumSet.of(
+            Permission.DOC_READ,
+            Permission.FEEDBACK_WRITE,
+            Permission.QA_READ,
+            Permission.DASHBOARD_READ
+        ));
 
         User admin = userRepository.findByUsername(adminUsername).orElse(null);
         if (admin == null) {

@@ -10,6 +10,6 @@ public class QaRequest {
 
     @NotBlank
     private String question;
+
+    private Long sessionId;
 }
-
-

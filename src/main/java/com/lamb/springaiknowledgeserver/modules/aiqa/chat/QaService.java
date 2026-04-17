@@ -13,16 +13,22 @@ import com.lamb.springaiknowledgeserver.modules.aiqa.chat.QaLogRepository;
 import java.io.InterruptedIOException;
 import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -44,6 +50,7 @@ public class QaService {
     private final RerankService rerankService;
     private final SystemConfigService systemConfigService;
     private final QaLogRepository qaLogRepository;
+    private final ChatSessionRepository chatSessionRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${app.rag.answer-style:简洁、准确、专业}")
@@ -64,7 +71,8 @@ public class QaService {
     @Value("${spring.ai.openai.chat.options.model:}")
     private String defaultChatModel;
 
-    public QaResponse answer(Long userId, String username, String roleName, String question) {
+    public QaResponse answer(Long userId, String username, String roleName, String question, Long sessionId) {
+        Long activeSessionId = ensureSession(userId, sessionId, question);
         List<HybridSearchService.HybridChunk> chunks;
         try {
             chunks = hybridSearchService.search(roleName, question);
@@ -72,20 +80,24 @@ public class QaService {
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索知识库信息时发生异常，请稍后重试", ex);
         }
+        
         List<DocumentResponse> documents = List.of();
         List<QaSourceResponse> sources = List.of();
         if (chunks.isEmpty()) {
-            Long qaLogId = logQa(userId, username, DEFAULT_NO_ANSWER, documents, roleName, question, sources);
-            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId);
+            Long qaLogId = logQa(userId, username, activeSessionId, DEFAULT_NO_ANSWER, documents, roleName, question, sources);
+            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId, activeSessionId);
         }
 
         String context = buildContext(chunks);
         OpenAiChatOptions options = buildChatOptions();
+        List<Message> history = getChatHistory(activeSessionId);
+        
         String answer;
         try {
             answer = chatClient.prompt()
                 .options(options)
                 .system(systemPrompt())
+                .messages(history)
                 .user(userPrompt(question, context))
                 .call()
                 .content();
@@ -102,11 +114,12 @@ public class QaService {
 
         documents = resolveDocuments(chunks, roleName);
         sources = buildSources(chunks);
-        Long qaLogId = logQa(userId, username, answer, documents, roleName, question, sources);
-        return new QaResponse(answer, documents, sources, qaLogId);
+        Long qaLogId = logQa(userId, username, activeSessionId, answer, documents, roleName, question, sources);
+        return new QaResponse(answer, documents, sources, qaLogId, activeSessionId);
     }
 
-    public Flux<QaResponse> streamAnswer(Long userId, String username, String roleName, String question) {
+    public Flux<QaResponse> streamAnswer(Long userId, String username, String roleName, String question, Long sessionId) {
+        Long activeSessionId = ensureSession(userId, sessionId, question);
         List<HybridSearchService.HybridChunk> chunks;
         try {
             chunks = hybridSearchService.search(roleName, question);
@@ -116,12 +129,13 @@ public class QaService {
         }
 
         if (chunks.isEmpty()) {
-            Long qaLogId = logQa(userId, username, DEFAULT_NO_ANSWER, List.of(), roleName, question, List.of());
-            return Flux.just(new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId));
+            Long qaLogId = logQa(userId, username, activeSessionId, DEFAULT_NO_ANSWER, List.of(), roleName, question, List.of());
+            return Flux.just(new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId, activeSessionId));
         }
 
         String context = buildContext(chunks);
         OpenAiChatOptions options = buildChatOptions();
+        List<Message> history = getChatHistory(activeSessionId);
         List<DocumentResponse> documents = resolveDocuments(chunks, roleName);
         List<QaSourceResponse> sources = buildSources(chunks);
         
@@ -130,27 +144,123 @@ public class QaService {
         Flux<String> contentStream = chatClient.prompt()
             .options(options)
             .system(systemPrompt())
+            .messages(history)
             .user(userPrompt(question, context))
             .stream()
             .content();
 
         return contentStream.map(chunk -> {
                 answerBuilder.append(chunk);
-                return new QaResponse(chunk, null, null, null); // just send delta in body
+                return new QaResponse(chunk, null, null, null, activeSessionId);
             }).concatWith(Flux.defer(() -> {
                 String finalAnswer = enforceMaxAnswerChars(answerBuilder.toString());
                 if (finalAnswer == null || finalAnswer.isBlank()) {
                     finalAnswer = DEFAULT_NO_ANSWER;
                 }
-                Long qaLogId = logQa(userId, username, finalAnswer, documents, roleName, question, sources);
-                // final event with sources and logId to let UI finish
-                return Flux.just(new QaResponse(null, documents, sources, qaLogId));
+                Long qaLogId = logQa(userId, username, activeSessionId, finalAnswer, documents, roleName, question, sources);
+                return Flux.just(new QaResponse(null, documents, sources, qaLogId, activeSessionId));
             })).onErrorResume(ex -> {
                 if (isTimeoutException(ex)) {
                     return Flux.error(new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "大模型思考超时，由于当前并发量较高，请您稍后再试", ex));
                 }
                 return Flux.error(new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "连接大模型服务时发生网络波动，请联系系统管理员进行排查", ex));
             });
+    }
+
+    public List<String> getSuggestions(String roleName) {
+        List<Document> latestDocs = documentRepository.findVisibleByRolesOrderByUpdatedAtDesc(
+            List.of(roleName), 
+            PageRequest.of(0, 5)
+        );
+        
+        Set<String> questions = new LinkedHashSet<>();
+        for (Document doc : latestDocs) {
+            String suggestionsLine = doc.getSuggestedQuestions();
+            if (suggestionsLine != null && !suggestionsLine.isBlank()) {
+                questions.addAll(parseQuestions(suggestionsLine));
+            }
+        }
+        
+        // Pick top 4
+        List<String> result = new ArrayList<>(questions);
+        if (result.size() > 4) {
+            Collections.shuffle(result);
+            return result.subList(0, 4);
+        }
+        return result;
+    }
+
+    public String generateSuggestedQuestions(String title, String content) {
+        if (content == null || content.isBlank()) {
+            return "[]";
+        }
+        
+        // Take first 2000 chars for context
+        String summary = content.substring(0, Math.min(content.length(), 2000));
+        
+        try {
+            String prompt = PromptTemplates.DOCUMENT_SUGGESTION_TEMPLATE
+                .replace("{content}", "标题: " + title + "\n\n内容: " + summary);
+
+            String response = chatClient.prompt()
+                .system(prompt)
+                .call()
+                .content();
+
+            // Validate it's a JSON array
+            if (response != null && response.trim().startsWith("[")) {
+                return response.trim();
+            }
+            log.debug("LLM returned non-JSON for suggestions: {}", response);
+        } catch (Exception ex) {
+            log.error("Failed to generate suggested questions for {}", title, ex);
+        }
+        return "[]";
+    }
+
+    private List<String> parseQuestions(String json) {
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            log.debug("Failed to parse suggested questions JSON: {}", json);
+            return List.of();
+        }
+    }
+
+    private Long ensureSession(Long userId, Long sessionId, String question) {
+        if (sessionId != null) {
+            ChatSession session = chatSessionRepository.findById(sessionId).orElse(null);
+            if (session != null) {
+               session.setLatestQuestion(question);
+               chatSessionRepository.save(session);
+               return sessionId;
+            }
+        }
+        // Create new session
+        ChatSession session = new ChatSession();
+        session.setUserId(userId);
+        session.setLatestQuestion(question);
+        // Set title from first 20 chars of question
+        String title = question.length() > 20 ? question.substring(0, 20) + "..." : question;
+        session.setTitle(title);
+        session = chatSessionRepository.save(session);
+        return session.getId();
+    }
+
+    private List<Message> getChatHistory(Long sessionId) {
+        if (sessionId == null) return List.of();
+        List<QaLog> logs = qaLogRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        // Limit to last 10 turns (20 messages max)
+        int start = Math.max(0, logs.size() - 10);
+        List<Message> messages = new ArrayList<>();
+        for (int i = start; i < logs.size(); i++) {
+            QaLog log = logs.get(i);
+            messages.add(new UserMessage(log.getQuestion()));
+            if (log.getAnswer() != null) {
+                messages.add(new AssistantMessage(log.getAnswer()));
+            }
+        }
+        return messages;
     }
 
     private String buildContext(List<HybridSearchService.HybridChunk> chunks) {
@@ -320,6 +430,7 @@ public class QaService {
     private Long logQa(
         Long userId,
         String username,
+        Long sessionId,
         String answer,
         List<DocumentResponse> documents,
         String roleName,
@@ -330,6 +441,7 @@ public class QaService {
             QaLog log = new QaLog();
             log.setUserId(userId);
             log.setUsername(username);
+            log.setSessionId(sessionId);
             log.setQuestion(question);
             log.setAnswer(answer);
             log.setRoleName(roleName);
@@ -368,7 +480,3 @@ public class QaService {
         return false;
     }
 }
-
-
-
-

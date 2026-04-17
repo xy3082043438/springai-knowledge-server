@@ -37,6 +37,16 @@ public interface QaLogRepository extends JpaRepository<QaLog, Long> {
     List<QaQuestionActivityRow> findQuestionActivitiesSince(@Param("startTime") Instant startTime);
 
     long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant startTime, Instant endTime);
+
+    List<QaLog> findBySessionIdOrderByCreatedAtAsc(Long sessionId);
+
+    @Query("select l from QaLog l where l.userId = :userId and l.sessionId is null order by l.createdAt asc")
+    List<QaLog> findOrphansByUserId(@Param("userId") Long userId);
+
+    @jakarta.transaction.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("update QaLog l set l.sessionId = :sessionId where l.userId = :userId and l.sessionId is null")
+    void migrateOrphans(@Param("userId") Long userId, @Param("sessionId") Long sessionId);
 }
 
 

@@ -18,6 +18,17 @@ public final class PromptTemplates {
         {context}
         """;
 
+    public static final String DOCUMENT_SUGGESTION_TEMPLATE = """
+        你是一个文档分析专家。请根据提供的文档内容，生成3个用户最可能感兴趣的高质量提问。
+        要求：
+        1. 问题简练、专业且具有代表性。
+        2. 严禁编造，问题必须能从文档中找到答案。
+        3. 直接返回 JSON 数组格式，如：["问题1", "问题2", "问题3"]。
+        
+        文档内容:
+        {content}
+        """;
+
     private PromptTemplates() {
     }
 }
