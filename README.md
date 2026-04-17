@@ -10,16 +10,17 @@
 - 🛡️ **内生级安全与审计**: 
   - 基于 **Spring Security** & **JWT** 的无状态鉴权防线。
   - 精密的 **RBAC**（用户-角色-权限）隔离模型，支持细粒度至文档级别的权限访问管控。
-  - 不留死角的全量接口调用、异常捕获记录与 AI 问答日志追踪。
+  - **全方位审计**: 提供操作日志、AI 问答日志、用户反馈日志的深度追踪，并支持 **Excel 一键导出**（基于 Apache POI）。
 - 📄 **多维格式文档中台**: 
   - 极度包容的文件支持引擎：可流畅解析 `PDF`, `DOCX`, `PPTX`, `XLSX`, `TXT`, `MD`, `HTML`, `CSV`。
-  - 架构级的异步文档解析，深度利用 **RabbitMQ** 削峰填谷，应对海量企业并发上传场景。
+  - **智能异步解析**: 引入 `DocumentProcessorHelper` 优化解析链路，利用 **RabbitMQ** 削峰填谷。
+  - **AI 知识沉淀**: 解析过程中自动提取文档摘要并生成 **AI 推荐问题**，助力用户快速上手。
 - 🔍 **复合型智能检索引擎**:
   - **混合搜索 (Hybrid Search)**: 向量检索（Semantic 语义感知）与全文检索（Keyword 精准命中）的深度加权融合。
   - **重排优化 (Rerank)**: 接入大厂级重排通道（**SiliconFlow**），对检出片段进行二次打分，显著提升回复准召率。
 - 🤖 **大模型 RAG 生态闭环**:
   - 利用 **Spring AI** 彻底打通国内主流大模型生态，支持平滑的流式输出 (SSE) 交互。
-  - 提供绝对精准的文档级与段落级反向溯源定位（确保 RAG 体系的不“胡编乱造”）。
+  - **精准溯源**: 提供绝对精准的文档级与段落级反向溯源定位（确保 RAG 体系的不“胡编乱造”）。
 - 📊 **集约化数据观测基座**:
   - 高度抽象与聚合的 `Dashboard API`，专为前端“单页高密度展区”量身定做（汇聚数据趋势、词云分析与分布刻画）。
   - 原生级集成 **Spring Boot Actuator** 构建系统状态监控探针。
@@ -30,13 +31,13 @@
 
 ## 🛠 现代技术深度栈
 
-- **核心驱动层**: Java 21 / Spring Boot 4.0.3
-- **AI 智能编排**: Spring AI 2.0.0-M2
+- **核心驱动层**: Java 21 / Spring Boot 4.0.5
+- **AI 智能编排**: Spring AI 2.0.0-M4
 - **向量检索引擎**: PostgreSQL 15+ (深度搭载 `pgvector` 扩展)
 - **高性能消息总线**: RabbitMQ
-- **底层模型调用链**: SiliconFlow (默认搭载: Qwen3-14B, bge-large-zh 向量, bge-reranker 重排)
+- **底层模型调用链**: SiliconFlow (默认搭载: Qwen2.5-72B, bge-m3 向量, bge-reranker-v2-m3 重排)
 - **元数据与文档说明**: SpringDoc OpenAPI 3.0 (高可用 Swagger UI 集成)
-- **硬核构建套件**: Maven, Docker, Lombok, Jackson
+- **硬核构建套件**: Maven, Docker, Lombok, Jackson, Apache POI
 
 ---
 
@@ -68,7 +69,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ./mvnw clean package -DskipTests
 
 # 引擎点火运行
-java -jar target/springai-knowledge-server-0.0.1.jar
+java -jar target/springai-knowledge-server-1.0.0.jar
 ```
 
 ---
@@ -86,6 +87,6 @@ java -jar target/springai-knowledge-server-0.0.1.jar
 我们采用高内聚低耦合的限界上下文分层：
 - `core`: 掌管系统心脏的生命周期（自动装配、顶层异常拦截与通用工具链）。
 - `security`: 构建隔离墙，实现 Token 颁发乃至路由级别的授权鉴别。
-- `modules.knowledge`: 文档生命周期中枢。从上传落盘到 RabbitMQ 投递，到分段(Chunk)与向量化雕刻。
-- `modules.aiqa`: 面向用户的对话中继站（整合混合检索、Rerank 优化策略与长连接下发）。
-- `modules.system`: 支撑层底座。专司审计追踪、用户架构维护、运行时态配置与宏观 Dashboard 数据投喂。
+- `modules.knowledge`: 文档生命周期中枢。负责从上传落盘到 RabbitMQ 异步解析，由 `DocumentProcessorHelper` 协调分段与向量化雕刻。
+- `modules.aiqa`: 面向用户的对话中继站（整合混合检索、Rerank 优化策略、AI 推荐问题与流式 SSE 下发）。
+- `modules.system`: 支撑层底座。专司审计追踪（含 Excel 导出功能）、用户架构维护、运行时态配置与宏观 Dashboard 数据投喂。

@@ -3,9 +3,9 @@ spring:
     name: springai-knowledge-server
 
   datasource:
-      url: jdbc:postgresql://localhost:5432/springai_knowledge
-      username: postgres
-      password: ${PG_PASSWORD}
+      url: jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
+      username: postgres.ullobanmiwoccewcyfqr
+      password: ${PG_PASSWORD}.921
 
   jpa:
     hibernate:
