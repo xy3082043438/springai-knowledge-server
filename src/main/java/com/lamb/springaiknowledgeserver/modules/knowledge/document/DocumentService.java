@@ -117,6 +117,7 @@ public class DocumentService {
 
         Document document = new Document();
         document.setTitle((title == null || title.isBlank()) ? safeName : title);
+        document.setContent("");
         document.setFileName(safeName);
         document.setContentType(fileType.defaultContentType);
         document.setFileSize(file.getSize());
@@ -188,6 +189,7 @@ public class DocumentService {
         if (roleNames != null && !roleNames.isEmpty()) {
             document.setAllowedRoles(resolveRoles(roleNames));
         }
+        document.setContent("");
         document.setFileName(safeName);
         document.setContentType(fileType.defaultContentType);
         document.setFileSize(file.getSize());

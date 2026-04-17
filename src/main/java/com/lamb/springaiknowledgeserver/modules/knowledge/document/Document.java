@@ -36,7 +36,7 @@ public class Document {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(columnDefinition = "text")
     private String content;
 
     @Column
