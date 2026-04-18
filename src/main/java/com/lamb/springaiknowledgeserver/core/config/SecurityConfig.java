@@ -3,6 +3,7 @@ package com.lamb.springaiknowledgeserver.core.config;
 import com.lamb.springaiknowledgeserver.security.auth.CustomUserDetailsService;
 import com.lamb.springaiknowledgeserver.security.auth.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -20,6 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableMethodSecurity
+@Slf4j
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -55,8 +57,17 @@ public class SecurityConfig {
             .formLogin(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint((request, response, authException) -> resolver.resolveException(request, response, null, authException))
-                .accessDeniedHandler((request, response, accessDeniedException) -> resolver.resolveException(request, response, null, accessDeniedException))
+                .authenticationEntryPoint((request, response, authException) -> {
+                    if (!response.isCommitted()) {
+                        resolver.resolveException(request, response, null, authException);
+                    }
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    log.error("[安全防护] 访问拒绝: {} {}, 原因: {}", request.getMethod(), request.getRequestURI(), accessDeniedException.getMessage());
+                    if (!response.isCommitted()) {
+                        resolver.resolveException(request, response, null, accessDeniedException);
+                    }
+                })
             )
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth

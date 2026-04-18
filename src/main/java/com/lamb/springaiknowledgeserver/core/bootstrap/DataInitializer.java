@@ -14,9 +14,11 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Order(10)
+@Slf4j
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
 
@@ -34,24 +36,9 @@ public class DataInitializer implements ApplicationRunner {
     public void run(@NonNull ApplicationArguments args) {
         Role adminRole = ensureRole(
             "ADMIN",
-            EnumSet.of(
-                Permission.USER_READ,
-                Permission.USER_WRITE,
-                Permission.ROLE_READ,
-                Permission.ROLE_WRITE,
-                Permission.DOC_READ,
-                Permission.DOC_WRITE,
-                Permission.CONFIG_READ,
-                Permission.CONFIG_WRITE,
-                Permission.LOG_READ,
-                Permission.LOG_WRITE,
-                Permission.LOG_EXPORT,
-                Permission.FEEDBACK_READ,
-                Permission.FEEDBACK_WRITE,
-                Permission.DASHBOARD_READ,
-                Permission.QA_READ
-            )
+            EnumSet.allOf(Permission.class)
         );
+        log.info("[系统配置] ADMIN 角色初始化完成，当前权限标识: {}", adminRole.getPermissions());
         ensureRole("USER", EnumSet.of(
             Permission.DOC_READ,
             Permission.FEEDBACK_WRITE,

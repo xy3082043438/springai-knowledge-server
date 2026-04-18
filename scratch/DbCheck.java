@@ -1,32 +1,45 @@
+package com.lamb.springaiknowledgeserver.scratch;
+
 import java.sql.*;
+import java.util.*;
 
 public class DbCheck {
-    public static void main(String[] args) {
-        String url = "jdbc:postgresql://localhost:5432/springai_knowledge";
+    public static void main(String[] args) throws Exception {
+        String url = "jdbc:postgresql://47.109.80.120:5432/springai_knowledge";
         String user = "postgres";
         String password = System.getenv("PG_PASSWORD");
         
+        if (password == null) {
+            System.out.println("PG_PASSWORD not found in env");
+            return;
+        }
+
         try (Connection conn = DriverManager.getConnection(url, user, password)) {
-            System.out.println("Connected to Postgres!");
+            System.out.println("Connected to DB");
             
-            try (Statement stmt = conn.createStatement()) {
-                System.out.println("Checking app_qa_log...");
-                ResultSet rs = stmt.executeQuery("SELECT count(*) FROM app_qa_log");
-                if (rs.next()) System.out.println("Total QA Logs: " + rs.getInt(1));
-                
-                System.out.println("Checking sessions...");
-                rs = stmt.executeQuery("SELECT count(*) FROM app_chat_session");
-                if (rs.next()) System.out.println("Total Sessions: " + rs.getInt(1));
-                
-                System.out.println("First 5 logs:");
-                rs = stmt.executeQuery("SELECT id, user_id, session_id, question FROM app_qa_log LIMIT 5");
+            // Check ADMIN role permissions
+            String sql = "SELECT p.permission FROM app_role_permission p " +
+                         "JOIN app_role r ON p.role_id = r.id " +
+                         "WHERE r.name = 'ADMIN'";
+            
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                System.out.println("ADMIN Permissions:");
                 while (rs.next()) {
-                    System.out.printf("ID: %d, UID: %d, SID: %d, Q: %s%n", 
-                        rs.getLong("id"), rs.getLong("user_id"), rs.getLong("session_id"), rs.getString("question"));
+                    System.out.println(" - " + rs.getString("permission"));
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+            
+            // Check users and roles
+            sql = "SELECT username, r.name as role_name FROM app_user u " +
+                  "LEFT JOIN app_role r ON u.role_id = r.id";
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                System.out.println("Users:");
+                while (rs.next()) {
+                    System.out.println(" - " + rs.getString("username") + " (" + rs.getString("role_name") + ")");
+                }
+            }
         }
     }
 }

@@ -21,9 +21,9 @@ public class DocumentAsyncService {
     @Async
     @Transactional
     public void processDocumentAsync(Long documentId, byte[] fileBytes, String contentType, String fileName) {
-        Document document = documentRepository.findById(documentId).orElse(null);
+        Document document = findDocumentWithRetry(documentId);
         if (document == null) {
-            log.warn("[解析任务] 未能找到文档 ID: {}", documentId);
+            log.error("[解析任务] 经过重试仍未能从数据库找到文档 ID: {} (文件名: {})", documentId, fileName);
             return;
         }
 
@@ -52,9 +52,9 @@ public class DocumentAsyncService {
     @Async
     @Transactional
     public void reindexAsync(Long documentId) {
-        Document document = documentRepository.findById(documentId).orElse(null);
+        Document document = findDocumentWithRetry(documentId);
         if (document == null) {
-            log.warn("[重索引] 未能找到文档 ID: {}", documentId);
+            log.error("[重索引] 经过重试仍未能从数据库找到文档 ID: {}", documentId);
             return;
         }
 
@@ -78,5 +78,30 @@ public class DocumentAsyncService {
         } finally {
             documentRepository.save(document);
         }
+    }
+
+    private Document findDocumentWithRetry(Long documentId) {
+        int attempts = 0;
+        int maxAttempts = 5;
+        long delayMs = 500;
+        
+        while (attempts < maxAttempts) {
+            Document document = documentRepository.findById(documentId).orElse(null);
+            if (document != null) {
+                return document;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                log.debug("[解析任务] 文档记录尚不可见，正在进行第 {} 次重试... (ID: {})", attempts, documentId);
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 }

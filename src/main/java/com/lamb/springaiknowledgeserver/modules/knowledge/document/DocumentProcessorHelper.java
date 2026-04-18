@@ -55,9 +55,11 @@ public class DocumentProcessorHelper {
     private int embeddingSafeChunkSize;
 
     public void processAndIndex(Document document, byte[] fileBytes, String contentType, String fileName) throws IOException {
+        log.info("[解析基础] 准备提取内容: {} (类型: {}, 大小: {} bytes)", fileName, contentType, fileBytes.length);
         DocumentFileType fileType = resolveUploadFileType(contentType, fileName);
         ParsedContent parsed = extractContent(fileBytes, fileType);
         
+        log.info("[解析基础] 内容提取完成，文本长度: {} 字符", parsed.text != null ? parsed.text.length() : 0);
         document.setContent(parsed.text);
         document.setContentType(fileType.defaultContentType);
         
@@ -83,19 +85,27 @@ public class DocumentProcessorHelper {
     }
 
     public void rebuildChunks(Document document, List<PageText> pages) {
+        log.info("[分段操作] 开始为文档 ID: {} 重建分段...", document.getId());
         List<DocumentChunk> existing = documentChunkRepository.findByDocumentIdOrderByChunkIndex(document.getId());
-        deleteVectors(document.getId(), existing);
-        documentChunkRepository.deleteByDocumentId(document.getId());
+        if (!existing.isEmpty()) {
+            log.info("[分段操作] 正在清理旧的向量数据 (数量: {})", existing.size());
+            deleteVectors(document.getId(), existing);
+            documentChunkRepository.deleteByDocumentId(document.getId());
+        }
         
         List<DocumentChunk> chunks = (pages == null || pages.isEmpty())
             ? splitToChunks(document)
             : splitToChunks(document, pages);
             
-        if (chunks.isEmpty()) return;
+        if (chunks.isEmpty()) {
+            log.warn("[分段操作] 文档内未发现可分段的内容 (ID: {})", document.getId());
+            return;
+        }
         
+        log.info("[分段操作] 正在保存 {} 个新分段并同步至向量库", chunks.size());
         List<DocumentChunk> saved = documentChunkRepository.saveAll(chunks);
         vectorStore.add(toVectorDocuments(document, saved));
-        log.info("[向量操作] 已同步 {} 个片段 (文档 ID: {})", saved.size(), document.getId());
+        log.info("[分段操作] 同步完成 (文档 ID: {})", document.getId());
     }
 
     public void refreshVectorMetadata(Document document) {
@@ -118,18 +128,24 @@ public class DocumentProcessorHelper {
     }
 
     private ParsedContent extractPdf(byte[] bytes) {
+        log.info("[PDF解析] 正在加载 PDF 文档...");
         try (PDDocument doc = Loader.loadPDF(bytes)) {
             PDFTextStripper stripper = new PDFTextStripper();
             int totalPages = doc.getNumberOfPages();
+            log.info("[PDF解析] 文档加载完成，总页数: {}", totalPages);
             List<PageText> pages = new ArrayList<>();
             for (int page = 1; page <= totalPages; page++) {
                 stripper.setStartPage(page);
                 stripper.setEndPage(page);
                 String text = stripper.getText(doc);
                 pages.add(new PageText(page, text == null ? "" : text));
+                if (page % 5 == 0 || page == totalPages) {
+                    log.debug("[PDF解析] 已提取 {}/{} 页", page, totalPages);
+                }
             }
             return new ParsedContent(joinPages(pages), pages);
         } catch (IOException ex) {
+            log.error("[PDF解析] 解析过程中发生异常", ex);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "解析 PDF 失败，文件内容格式可能异常", ex);
         }
     }
