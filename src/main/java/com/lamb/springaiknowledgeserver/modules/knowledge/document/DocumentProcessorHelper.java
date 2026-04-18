@@ -95,6 +95,7 @@ public class DocumentProcessorHelper {
         
         List<DocumentChunk> saved = documentChunkRepository.saveAll(chunks);
         vectorStore.add(toVectorDocuments(document, saved));
+        log.info("[向量操作] 已同步 {} 个片段 (文档 ID: {})", saved.size(), document.getId());
     }
 
     public void refreshVectorMetadata(Document document) {

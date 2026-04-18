@@ -34,6 +34,9 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         """)
     long countByAllowedRoleId(@Param("roleId") Long roleId);
 
+    @Query("select d from Document d where d.status = :status")
+    List<Document> findByStatus(@Param("status") DocumentStatus status);
+
     @Query("""
         select d.contentType as contentType, d.fileName as fileName
         from Document d
