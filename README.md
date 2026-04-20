@@ -1,149 +1,159 @@
-# SpringAI Knowledge Server
+# SpringAI Knowledge Base - Server (后端服务)
 
-基于 Spring Boot 4、Spring AI、PostgreSQL `pgvector` 和 RabbitMQ 的知识库后端服务，提供文档入库、分段向量化、混合检索、RAG 问答、权限控制、审计日志和系统配置管理能力。
+[![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.5-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M4-green.svg)](https://spring.io/projects/spring-ai)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://www.postgresql.org/)
 
-## 项目定位
+本仓库是 **SpringAI Knowledge** 项目的后端服务端，基于 Spring Boot 4.x 和 Spring AI 体系构建，旨在提供企业级的私有化知识库管理与 RAG（检索增强生成）智能问答能力。
 
-这个项目是一个面向企业知识库场景的后端服务，核心职责包括：
+> **💡 完整项目提示**
+> 本项目采用前后端分离架构，当前为**后端服务**仓库。
+> 配套的**前端控制台**（Vue 3 + Vite）请访问：[springai-knowledge-web](前端仓库链接请替换至此处)
 
-- 文档管理：上传、替换、检索、重建索引、文件预览
-- 知识问答：基于文档分段和向量检索生成回答，支持流式输出
-- 权限控制：基于 JWT + Spring Security + RBAC 控制访问范围
-- 系统运营：用户、角色、日志、反馈、仪表盘、运行时配置
+## 🏗️ 系统整体架构图
 
-## 技术栈
+*(建议将根目录的 `系统总体架构.png` 以及 `混合检索与问答流程.png` 图传到仓库中，并在此处展示，让用户一目了然看清全局)*
+![系统总体架构](./系统总体架构.png)
 
-- Java 21
-- Spring Boot 4.0.5
-- Spring AI 2.0.0-M4
-- Spring MVC / Spring Security / Spring Data JPA / Actuator
-- PostgreSQL + `pgvector`
-- RabbitMQ
-- OpenAI 兼容模型接口（当前配置为 SiliconFlow）
-- Apache PDFBox / Apache POI / Jsoup
-- springdoc-openapi
+## ✨ 核心特性
 
-## 核心能力
+- **📄 多格式文档解析与切分**：集成 Apache PDFBox, POI, Jsoup 等库，支持主流格式（PDF/Word/TXT/Markdown/HTML 等）文档解析，并通过 Spring AI 提供多策略的文本分段（Chunking）。
+- **🔍 混合检索与 RAG 引擎**：深度集成 PostgreSQL 的 `pgvector` 扩展，支持文本向量化检索及结合大语言模型（LLM）的智能流式推理问答。
+- **⚡ 异步架构**：基于 RabbitMQ 消息队列的异步非阻塞文档处理机制，确保大文件向量化时不阻塞主线程，提升系统吞吐量。
+- **🛡️ RBAC 安全认证**：整合 Spring Security 结合 JWT 和 Easy Captcha 提供完善的权限访问控制（用户-角色-权限），支持文档的细粒度可见性。
+- **📊 监控与统计分析**：提供对问答记录、请求量、系统资源等详尽的端点数据监控支持。
 
-### 1. 文档知识入库
+## 🛠️ 技术栈核心
 
-支持以下文件格式：
+- **核心框架**: Java 21, Spring Boot 4.0.5
+- **持久层框架**: Spring Data JPA
+- **AI 框架**: Spring AI (2.0.0-M4), 兼容 OpenAI API
+- **向量数据库**: PostgreSQL + pgvector
+- **消息队列**: RabbitMQ
+- **安全与认证**: Spring Security, JWT (jjwt), 图形/滑块验证码
+- **快速开发工具**: Lombok, MapStruct
+- **API 文档**: Springdoc OpenAPI / Swagger UI
 
-- `PDF`
-- `DOCX`
-- `PPTX`
-- `XLSX`
-- `TXT`
-- `MD`
-- `HTML`
-- `CSV`
+## 📂 项目模块结构
 
-文档处理流程：
+项目按高内聚低耦合原则划分结构：
 
-1. 上传文件或直接创建文本型文档
-2. 提取正文内容
-3. 按配置切分为多个 chunk
-4. 写入业务表并同步到 `pgvector`
-5. 为问答、搜索和溯源提供基础数据
+```text
+springai-knowledge-server/
+├── src/main/java/com/lamb/springaiknowledgeserver
+│   ├── config/         # 核心配置 (Security, Redis, Swagger, RabbitMQ 等)
+│   ├── controller/     # 面向前端的 API 服务入口
+│   ├── entity/         # 数据库映射实体类 (JPA Entities)
+│   ├── repository/     # 数据访问层 (JPA Repositories)
+│   ├── service/        # 核心业务逻辑层 (涵盖 RAG、文件处理、认证、系统功能)
+│   ├── security/       # JWT 认证拦截、UserDetailsService、RBAC鉴权逻辑
+│   ├── exception/      # 全局统一异常处理与自定义异常
+│   └── utils/          # 工具包 (响应封装、加密等全局工具类)
+└── src/main/resources
+    ├── application.yml # 环境与基础系统配置
+    └── captcha/        # 图形/拼图验证码底层资源文件
+```
 
-项目中还提供：
+## 🚀 快速启动
 
-- 单文档重建索引
-- 全量重建索引
-- chunk 预览
-- 原始文件在线预览
-- 基于角色的文档可见性控制
+### 1. 环境依赖与准备
 
-### 2. RAG 问答
+- **JDK**: 21 
+- **数据库**: PostgreSQL 15+ (必须安装 `vector` 扩展)
+- **中间件**: RabbitMQ 3.x
+- **大模型 API Key**: 兼容 OpenAI 的 API Key (例如：ChatGPT / 硅基流动 SiliconFlow / 阿里云百炼等)
 
-问答模块提供：
+### 2. 数据库初始化
 
-- 普通问答接口
-- SSE 流式问答接口
-- 会话历史查询
-- 推荐问题生成与补全
-- 问答日志与用户反馈
+连接至 PostgreSQL 并初始化数据库及扩展：
+```sql
+CREATE DATABASE springai_knowledge;
+\c springai_knowledge;
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+*提示：Spring Data JPA 将会自动在服务启动时通过 `hibernate.ddl-auto` 构建应用基础表结构。*
 
-当前默认模型相关配置来自 `application.yml`：
+### 3. 系统核心配置
 
-- Chat：`Qwen/Qwen3-14B`
-- Embedding：`BAAI/bge-large-zh-v1.5`
-- Rerank：`BAAI/bge-reranker-v2-m3`
+在 `src/main/resources/application.yml` 中配置相应的外部参数：
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/springai_knowledge
+    username: <your-db-username>
+    password: <your-db-password>
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: <rabbit-user>
+    password: <rabbit-pass>
+  ai:
+    openai:
+      api-key: <your-api-key>
+      base-url: <your-base-url>
+```
 
-### 3. 混合检索与动态参数
+### 4. 编译与启动服务
 
-项目同时维护了应用配置和系统配置表：
+利用内置的 Wrapper 快速运行项目：
+```bash
+# Windows
+.\mvnw.cmd clean install -DskipTests
+.\mvnw.cmd spring-boot:run
 
-- 静态配置：数据库、RabbitMQ、模型网关、上传目录等
-- 动态配置：chunk 参数、混合检索参数、生成参数、Prompt 模板等
+# Linux / MacOS
+./mvnw clean install -DskipTests
+./mvnw spring-boot:run
+```
+服务默认监听在 `8080` 端口。
 
-启动时会自动初始化一批系统配置项，例如：
+## 📖 API 接口文档
 
-- `chunk.size`
-- `chunk.overlap`
-- `chunk.embeddingSafeSize`
-- `hybrid.topK`
-- `hybrid.vectorTopK`
-- `hybrid.vectorSimilarityThreshold`
-- `hybrid.keywordTopK`
-- `hybrid.vectorWeight`
-- `hybrid.keywordWeight`
-- `keyword.tsConfig`
-- `rag.answerStyle`
-- `rag.maxAnswerChars`
-- `rag.maxOutputTokens`
-- `rag.temperature`
-- `rag.topP`
-- `rag.prompt.system`
-- `rag.prompt.user`
+项目启动后，可通过 Swagger UI 访问完整的 API 接口文档并在线调试：
+- **Swagger UI** 地址：[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- **Actuator 监控端点**：[http://localhost:8080/actuator](http://localhost:8080/actuator)
 
-### 4. 安全与审计
+## 🤝 贡献与规范
 
-安全模型由以下几部分组成：
+- 代码风格保持统一，提倡使用完整的 RESTful API 命名规范。
+- 新增业务务必编写单元测试（使用 JUnit 5 + Mockito）并在 Controller 层加上详细的 `@Operation` 注解。
+# 🧠 SpringAI Knowledge Server
 
-- `JWT` 无状态认证
-- `Spring Security` 请求保护
-- 方法级权限控制 `@PreAuthorize`
-- 基于角色的文档访问控制
-- 操作日志、问答日志、反馈日志
-- 日志导出为 Excel
+[![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.5-brightgreen.svg)](https://spring.io/projects/spring-boot)
+[![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M4-green.svg)](https://spring.io/projects/spring-ai)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://www.postgresql.org/)
 
-默认匿名开放的接口：
+本仓库是 **SpringAI Knowledge** 项目的后端服务提供完整的企业级知识库、RAG (检索增强生成) 问答、与混合检索能力。
 
-- `POST /api/auth/login`
-- `GET /api/auth/captcha`
-- `/swagger-ui/**`
-- `/v3/api-docs/**`
-- `GET /actuator/health`
+## ✨ 核心特性
 
-其余接口默认都需要认证。
+- **📄 多格式文档解析**：支持 PDF、Word、PPT、Excel、TXT、Markdown、HTML、CSV 等格式的解析与入库。
+- **🔍 混合检索与 RAG**：基于 PostgreSQL `pgvector` 提供向量检索与关键字混合检索，结合大模型提供精准的流式问答（SSE）。
+- **🛡️ 完善的安全控制**：使用 Spring Security + JWT 实现无状态认证，提供基于 RBAC 的精细化权限与文档可见性控制。
+- **⚙️ 动态系统配置**：支持动态调整 Chunk 策略、混合检索权重、大模型生成参数 (Temperature, TopP等) 及 Prompt 模板。
+- **📊 审计与监管**：完整的操作日志、问答日志追踪，支持用户对问答结果进行反馈与修正。
 
-## 默认初始化数据
+## 🛠️ 技术栈
 
-应用启动后会自动初始化：
+- **核心框架**: Java 21, Spring Boot 4.0.5, Spring MVC
+- **AI 与向量库**: Spring AI 2.0.0-M4, PostgreSQL + `pgvector` 扩展
+- **消息队列**: RabbitMQ (用于文档异步解析与向量化)
+- **大模型接口**: 兼容 OpenAI 格式的 API (默认配置为 SiliconFlow)
+- **文档处理**: Apache PDFBox, Apache POI, Jsoup
+- **API 文档**: springdoc-openapi (Swagger UI)
 
-- `ADMIN` 角色：拥有全部权限
-- `USER` 角色：默认拥有 `DOC_READ`、`FEEDBACK_WRITE`、`QA_READ`、`DASHBOARD_READ`
-- 管理员账号：来自 `app.admin.username` / `app.admin.password`
+## 🚀 快速开始
 
-当前仓库默认配置为：
+### 1. 环境准备
 
-- 用户名：`admin`
-- 密码：`admin123`
+- **JDK 21**
+- **Maven 3.9+** (也可使用自带的 `mvnw`)
+- **PostgreSQL 15+** (必须安装并启用 `vector` 扩展)
+- **RabbitMQ 3.x**
 
-建议在真实环境中覆盖该配置，不要直接使用默认值。
-
-## 环境要求
-
-- JDK 21
-- Maven 3.9+（或直接使用仓库自带 `mvnw` / `mvnw.cmd`）
-- PostgreSQL 15+，并安装 `vector` 扩展
-- RabbitMQ 3.x
-- 可访问的 OpenAI 兼容模型网关
-
-## 本地开发配置
-
-### 1. 初始化 PostgreSQL
+### 2. 数据库初始化
 
 ```sql
 CREATE DATABASE springai_knowledge;
@@ -151,177 +161,52 @@ CREATE DATABASE springai_knowledge;
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 
-项目当前通过环境变量读取以下敏感信息：
+项目依赖以下关键环境变量（可在 IDE 或启动脚本中配置）：
 
 ```bash
-PG_PASSWORD=your-postgres-password
-RABBITMQ_PASSWORD=your-rabbitmq-password
-SILICONFLOW_API_KEY=your-api-key
+export PG_PASSWORD=你的PG数据库密码
+export RABBITMQ_PASSWORD=你的RabbitMQ密码
+export SILICONFLOW_API_KEY=你的大模型API_KEY
 ```
+*(注：生产环境建议进一步修改为实际的 `security.jwt.secret`、`app.admin.password` 等参数)*
 
-如果你要用于生产环境，至少还需要修改：
+### 4. 启动服务
 
-- `security.jwt.secret`
-- `app.admin.username`
-- `app.admin.password`
-- `spring.datasource.url`
-- `spring.rabbitmq.host`
-
-### 3. 关键配置项
-
-`src/main/resources/application.yml` 中当前已包含以下配置类别：
-
-- 数据库连接
-- RabbitMQ 连接
-- Spring AI 模型与向量库配置
-- 文件上传大小限制
-- JWT 配置
-- 文档存储路径与分块参数
-- RAG 输出参数
-- 混合检索参数
-- Rerank 参数
-
-默认本地目录：
-
-- 上传目录：`./data/uploads`
-- 文档存储目录：`./data/documents`
-
-## 启动方式
-
-### Maven
-
-Windows：
-
+**以 Maven 运行 (Windows):**
 ```powershell
 .\mvnw.cmd clean package -DskipTests
 .\mvnw.cmd spring-boot:run
 ```
 
-Linux / macOS：
-
+**以 Maven 运行 (Linux/macOS):**
 ```bash
 ./mvnw clean package -DskipTests
 ./mvnw spring-boot:run
 ```
 
-### Jar 包运行
+服务默认运行在 `8080` 端口。
 
-```bash
-java -jar target/springai-knowledge-server-1.0.0.jar
-```
+## 📖 接口文档与默认账号
 
-### Docker
+- **Swagger UI**: [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+- **健康检查**: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
 
-仓库包含 `Dockerfile`，可自行构建镜像：
+**默认管理员账号** (应用启动后自动初始化)：
+- 用户名：`admin`
+- 密码：`admin123`
 
-```bash
-docker build -t springai-knowledge-server .
-docker run --rm -p 8080:8080 springai-knowledge-server
-```
+*(⚠️ 强烈建议在生产环境通过配置文件修改默认的 `app.admin.username` 和 `password`)*
 
-实际运行时仍需自行注入数据库、RabbitMQ 和模型服务相关配置。
-
-## 接口入口
-
-启动后可访问：
-
-- Swagger UI：`http://localhost:8080/swagger-ui/index.html`
-- OpenAPI：`http://localhost:8080/v3/api-docs`
-- 健康检查：`http://localhost:8080/actuator/health`
-
-## 主要接口分组
-
-### 认证
-
-- `GET /api/auth/captcha`
-- `POST /api/auth/login`
-- `POST /api/auth/logout`
-
-### 文档管理
-
-- `GET /api/documents`
-- `GET /api/documents/{id}`
-- `GET /api/documents/chunks/{chunkId}`
-- `POST /api/documents/search`
-- `POST /api/documents/upload`
-- `POST /api/documents/{id}/file`
-- `POST /api/documents`
-- `PATCH /api/documents/{id}`
-- `DELETE /api/documents/{id}`
-- `POST /api/documents/{id}/reindex`
-- `POST /api/documents/reindex`
-- `GET /api/documents/{id}/file`
-
-### 问答与会话
-
-- `POST /api/qa`
-- `POST /api/qa/stream`
-- `GET /api/qa/suggestions`
-- `POST /api/qa/suggestions/backfill`
-- `GET /api/aiqa/sessions`
-- `GET /api/aiqa/sessions/{id}/logs`
-- `DELETE /api/aiqa/sessions/{id}`
-
-### 反馈与日志
-
-- `POST /api/feedback`
-- `GET /api/feedback`
-- `GET /api/feedback/export`
-- `GET /api/logs/qa`
-- `GET /api/logs/qa/export`
-- `GET /api/logs/operations`
-- `GET /api/logs/operations/export`
-
-### 系统管理
-
-- `GET /api/dashboard`
-- `GET /api/system/status`
-- `GET /api/config`
-- `GET /api/config/{key}`
-- `PUT /api/config/{key}`
-- `POST /api/config/refresh`
-- `GET /api/users/me`
-- `PATCH /api/users/me`
-- `PATCH /api/users/me/password`
-- `GET /api/users`
-- `GET /api/users/{id}`
-- `POST /api/users`
-- `PATCH /api/users/{id}`
-- `DELETE /api/users/{id}`
-- `GET /api/roles`
-- `GET /api/roles/{id}`
-- `GET /api/roles/permissions`
-- `POST /api/roles`
-- `PATCH /api/roles/{id}`
-- `DELETE /api/roles/{id}`
-
-## 项目结构
+## 📂 项目结构简介
 
 ```text
 src/main/java/com/lamb/springaiknowledgeserver
-├─ core
-│  ├─ bootstrap    # 启动初始化：管理员、角色、系统配置、状态恢复
-│  ├─ config       # 安全、OpenAPI、AI 等基础配置
-│  ├─ dto          # 通用 DTO
-│  ├─ exception    # 全局异常处理
-│  └─ util         # 通用工具
-├─ security
-│  └─ auth         # JWT、登录、验证码、用户鉴权
-└─ modules
-   ├─ aiqa         # 问答、会话、反馈、问答日志
-   ├─ knowledge    # 文档、chunk、索引与检索
-   └─ system       # 用户、角色、配置、日志、仪表盘、上传
+├── core        # 基础核心层 (异常处理、公共DTO、全局配置、启动初始化)
+├── security    # 安全层 (JWT认证、验证码、登录鉴权)
+└── modules     # 业务模块层
+    ├── aiqa      # 智能问答、会话管理、问答反馈与日志
+    ├── knowledge # 知识库、文档解析、分段(Chunk)与向量检索
+    └── system    # 系统管理 (用户、角色、配置、系统日志、统计仪表盘)
 ```
-
-## 开发建议
-
-- 当前 `application.yml` 中包含固定地址和默认账号，更适合作为开发环境模板
-- 生产环境建议拆分 `application-dev.yml` / `application-prod.yml`
-- `spring.jpa.hibernate.ddl-auto` 当前为 `update`，上线前建议改为更可控的迁移方案
-- 建议配合 Flyway 或 Liquibase 管理数据库 schema
-
-## 许可证
-
-仓库当前未声明许可证；如需开源发布，建议补充明确的 License 文件。
