@@ -1,0 +1,101 @@
+services:
+  postgres:
+    build:
+      context: ./docker
+      dockerfile: postgres.Dockerfile
+    image: springai-postgres:1.0.0
+    pull_policy: never
+    container_name: springai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: springai_knowledge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d springai_knowledge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - springai-net
+
+  rabbitmq:
+    image: rabbitmq:4.3-management-alpine
+    container_name: springai-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      TZ: Asia/Shanghai
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - springai-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: springai-knowledge-server:1.0.0
+    pull_policy: never
+    container_name: springai-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "80:8080"
+    environment:
+      # Override hardcoded remote IPs in application.yml via Spring relaxed binding
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/springai_knowledge
+      SPRING_DATASOURCE_USERNAME: postgres
+      PG_PASSWORD: ${PG_PASSWORD}
+
+      # 初始化场景:首次启动让 Hibernate 按 Entity 自动建表;后续启动也安全(只增不删)
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+
+      TZ: Asia/Shanghai
+    volumes:
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - springai-net
+
+networks:
+  springai-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  rabbitmq_data:
+  app_data:

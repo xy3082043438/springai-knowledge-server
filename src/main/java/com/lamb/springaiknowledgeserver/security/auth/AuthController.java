@@ -1,5 +1,6 @@
 package com.lamb.springaiknowledgeserver.security.auth;
 
+import com.lamb.springaiknowledgeserver.core.util.RequestUtils;
 import com.lamb.springaiknowledgeserver.modules.system.log.OperationLogService;
 import com.lamb.springaiknowledgeserver.modules.system.user.User;
 import com.lamb.springaiknowledgeserver.modules.system.user.UserRepository;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,34 +37,42 @@ public class AuthController {
         @Valid @RequestBody AuthLoginRequest request,
         HttpServletRequest httpRequest
     ) {
+        String clientIp = RequestUtils.resolveClientIp(httpRequest);
+
+        if (captchaController.isLocked(clientIp)) {
+            throw new ServiceException("登录失败次数过多，请稍后再试");
+        }
+
         // Verify captcha
         String captchaKey = request.getCaptchaKey();
         String captchaCode = request.getCaptchaCode();
         String cachedValue = captchaController.getCaptchaValue(captchaKey);
-        
-        if (cachedValue == null || captchaCode == null) {
-            throw new ServiceException("验证码已过期，请刷新");
-        }
 
-        try {
-            if (cachedValue == null || captchaCode == null || !cachedValue.equals(captchaCode.trim())) {
-                throw new ServiceException("验证码不正确或已过期");
-            }
-            // Clear verification cache after success
+        if (cachedValue == null || captchaCode == null || !cachedValue.equals(captchaCode.trim())) {
+            captchaController.recordFailedAttempt(clientIp);
             captchaController.removeCaptcha(captchaKey);
-        } catch (Exception e) {
-            throw new ServiceException("验证失败，请重试");
+            throw new ServiceException("验证码不正确或已过期");
         }
+        // Clear verification cache after success
+        captchaController.removeCaptcha(captchaKey);
 
-        Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
-        );
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+        } catch (AuthenticationException ex) {
+            captchaController.recordFailedAttempt(clientIp);
+            throw ex;
+        }
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
         User user = userRepository.findById(principal.getId()).orElseThrow();
 
         String token = jwtService.generateToken(user);
         long expiresIn = jwtService.getExpirationSeconds();
+
+        captchaController.resetFailedAttempts(clientIp);
 
         operationLogService.log(
             user.getId(),
@@ -71,7 +81,7 @@ public class AuthController {
             "AUTH",
             String.valueOf(user.getId()),
             "login success",
-            com.lamb.springaiknowledgeserver.core.util.RequestUtils.resolveClientIp(httpRequest),
+            clientIp,
             true
         );
 

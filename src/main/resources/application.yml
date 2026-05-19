@@ -3,19 +3,32 @@ spring:
     name: springai-knowledge-server
 
   datasource:
-      url: jdbc:postgresql://47.109.80.120:5432/springai_knowledge
-      username: postgres
-      password: ${PG_PASSWORD}
+    url: jdbc:postgresql://47.109.80.120:5432/springai_knowledge
+    username: postgres
+    password: ${PG_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
 
   rabbitmq:
     host: 47.109.80.120
     username: admin
     password: ${RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        prefetch: 1
+        concurrency: 2
+        max-concurrency: 5
 
   ai:
     openai:
@@ -41,15 +54,15 @@ spring:
 
 security:
   jwt:
-    secret: change-me-please-change-me-32-bytes
+    secret: ${JWT_SECRET}
     expiration-seconds: 3600
 
 app:
   upload:
     path: ./data/uploads
   admin:
-    username: admin
-    password: admin123
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}
   document:
     storage-path: ./data/documents
     chunk-size: 1000

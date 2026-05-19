@@ -231,6 +231,10 @@ public class QaService {
         if (sessionId != null) {
             ChatSession session = chatSessionRepository.findById(sessionId).orElse(null);
             if (session != null) {
+               if (!Objects.equals(session.getUserId(), userId)) {
+                   throw new org.springframework.web.server.ResponseStatusException(
+                       org.springframework.http.HttpStatus.FORBIDDEN, "无权访问该会话");
+               }
                session.setLatestQuestion(question);
                chatSessionRepository.save(session);
                return sessionId;

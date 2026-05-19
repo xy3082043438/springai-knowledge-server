@@ -48,6 +48,12 @@ public class DataInitializer implements ApplicationRunner {
 
         User admin = userRepository.findByUsername(adminUsername).orElse(null);
         if (admin == null) {
+            if ("admin123".equals(adminPassword)) {
+                log.warn("============================================================");
+                log.warn("  WARNING: Creating admin user with DEFAULT password 'admin123'.");
+                log.warn("  Set environment variable ADMIN_PASSWORD before first start.");
+                log.warn("============================================================");
+            }
             admin = new User();
             admin.setUsername(adminUsername);
             admin.setPasswordHash(passwordEncoder.encode(adminPassword));

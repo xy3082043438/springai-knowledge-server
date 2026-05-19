@@ -74,8 +74,7 @@ public class DocumentService {
     private final SystemConfigService systemConfigService;
     private final DocumentAsyncService documentAsyncService; // 供保留的方法调用
     private final DocumentProcessorHelper documentProcessorHelper;
-    private final org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Value("${app.document.storage-path}")
     private String storagePath;
@@ -101,17 +100,8 @@ public class DocumentService {
         document.setStatus(DocumentStatus.PARSING);
         document.setAllowedRoles(roles);
         Document saved = documentRepository.save(document);
-        
-        try {
-            DocumentTaskMessage msg = new DocumentTaskMessage(saved.getId(), "REINDEX", saved.getContentType(), saved.getFileName());
-            rabbitTemplate.convertAndSend(
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_EXCHANGE,
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_ROUTING_KEY,
-                objectMapper.writeValueAsString(msg)
-            );
-        } catch (Exception e) {
-            log.error("发送重索引消息失败", e);
-        }
+        eventPublisher.publishEvent(new DocumentTaskEvent(
+            saved.getId(), "REINDEX", saved.getContentType(), saved.getFileName()));
         return saved;
     }
 
@@ -137,16 +127,8 @@ public class DocumentService {
         document.setAllowedRoles(resolveRoles(roleNames));
         
         Document saved = documentRepository.save(document);
-        try {
-            DocumentTaskMessage msg = new DocumentTaskMessage(saved.getId(), "PARSE", file.getContentType(), safeName);
-            rabbitTemplate.convertAndSend(
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_EXCHANGE,
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_ROUTING_KEY,
-                objectMapper.writeValueAsString(msg)
-            );
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "无法发送解析任务", e);
-        }
+        eventPublisher.publishEvent(new DocumentTaskEvent(
+            saved.getId(), "PARSE", file.getContentType(), safeName));
         return saved;
     }
 
@@ -213,16 +195,8 @@ public class DocumentService {
         document.setStatus(DocumentStatus.PARSING);
 
         Document saved = documentRepository.save(document);
-        try {
-            DocumentTaskMessage msg = new DocumentTaskMessage(saved.getId(), "PARSE", file.getContentType(), safeName);
-            rabbitTemplate.convertAndSend(
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_EXCHANGE,
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_ROUTING_KEY,
-                objectMapper.writeValueAsString(msg)
-            );
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "无法发送解析任务", e);
-        }
+        eventPublisher.publishEvent(new DocumentTaskEvent(
+            saved.getId(), "PARSE", file.getContentType(), safeName));
         if (oldPath != null && !oldPath.isBlank()) {
             deleteFileIfExists(oldPath);
         }
@@ -314,12 +288,8 @@ public class DocumentService {
             try {
                 document.setStatus(DocumentStatus.PARSING);
                 documentRepository.save(document);
-                DocumentTaskMessage msg = new DocumentTaskMessage(document.getId(), "REINDEX", document.getContentType(), document.getFileName());
-                rabbitTemplate.convertAndSend(
-                    com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_EXCHANGE,
-                    com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_ROUTING_KEY,
-                    objectMapper.writeValueAsString(msg)
-                );
+                eventPublisher.publishEvent(new DocumentTaskEvent(
+                    document.getId(), "REINDEX", document.getContentType(), document.getFileName()));
                 success++;
             } catch (Exception ex) {
                 log.debug("Failed to reindex document {}", document.getId(), ex);
@@ -338,16 +308,8 @@ public class DocumentService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
         document.setStatus(DocumentStatus.PARSING);
         documentRepository.save(document);
-        try {
-            DocumentTaskMessage msg = new DocumentTaskMessage(id, "REINDEX", document.getContentType(), document.getFileName());
-            rabbitTemplate.convertAndSend(
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_EXCHANGE,
-                com.lamb.springaiknowledgeserver.core.config.RabbitConfig.DOCUMENT_ROUTING_KEY,
-                objectMapper.writeValueAsString(msg)
-            );
-        } catch (Exception ex) {
-            log.error("发送重新解析任务失败", ex);
-        }
+        eventPublisher.publishEvent(new DocumentTaskEvent(
+            id, "REINDEX", document.getContentType(), document.getFileName()));
         return new DocumentReindexResponse(1, 1, 0, List.of());
     }
 
@@ -361,7 +323,10 @@ public class DocumentService {
             Path dir = Paths.get(storagePath).toAbsolutePath().normalize();
             Files.createDirectories(dir);
             String fileName = UUID.randomUUID() + "-" + safeName;
-            Path target = dir.resolve(fileName);
+            Path target = dir.resolve(fileName).normalize();
+            if (!target.startsWith(dir)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非法的文件名");
+            }
             file.transferTo(target);
             return target;
         } catch (IOException ex) {

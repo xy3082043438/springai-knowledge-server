@@ -21,9 +21,17 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class CaptchaController {
 
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final long LOCKOUT_MINUTES = 15;
+
     private final Cache<String, String> captchaCache = Caffeine.newBuilder()
             .expireAfterWrite(5, TimeUnit.MINUTES)
             .maximumSize(1000)
+            .build();
+
+    private final Cache<String, Integer> failedAttemptsCache = Caffeine.newBuilder()
+            .expireAfterWrite(LOCKOUT_MINUTES, TimeUnit.MINUTES)
+            .maximumSize(10000)
             .build();
 
     @GetMapping("/captcha")
@@ -31,10 +39,10 @@ public class CaptchaController {
         // Arithmetic captcha (e.g. 3+5=?)
         ArithmeticCaptcha captcha = new ArithmeticCaptcha(111, 36);
         captcha.setLen(2);
-        
+
         String key = UUID.randomUUID().toString();
         String result = captcha.text();
-        
+
         captchaCache.put(key, result);
 
         Map<String, Object> response = new HashMap<>();
@@ -55,5 +63,20 @@ public class CaptchaController {
         String cached = getCaptchaValue(captchaKey);
         if (cached == null || providedCode == null) return false;
         return cached.equals(providedCode.trim());
+    }
+
+    public boolean isLocked(String clientId) {
+        Integer attempts = failedAttemptsCache.getIfPresent(clientId);
+        return attempts != null && attempts >= MAX_FAILED_ATTEMPTS;
+    }
+
+    public void recordFailedAttempt(String clientId) {
+        if (clientId == null || clientId.isBlank()) return;
+        failedAttemptsCache.asMap().merge(clientId, 1, Integer::sum);
+    }
+
+    public void resetFailedAttempts(String clientId) {
+        if (clientId == null || clientId.isBlank()) return;
+        failedAttemptsCache.invalidate(clientId);
     }
 }
