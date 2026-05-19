@@ -5,7 +5,15 @@ import java.util.*;
 
 public class DbCheck {
     public static void main(String[] args) throws Exception {
-        String url = "jdbc:postgresql://47.109.80.120:5432/springai_knowledge";
+        String host = System.getenv("SERVER_IP");
+        if (host == null || host.isBlank()) {
+            host = "localhost";
+        }
+        String dbName = System.getenv("DB_NAME");
+        if (dbName == null || dbName.isBlank()) {
+            dbName = "springai_knowledge";
+        }
+        String url = "jdbc:postgresql://" + host + ":5432/" + dbName;
         String user = "postgres";
         String password = System.getenv("PG_PASSWORD");
         

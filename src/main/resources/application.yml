@@ -3,7 +3,7 @@ spring:
     name: springai-knowledge-server
 
   datasource:
-    url: jdbc:postgresql://47.109.80.120:5432/springai_knowledge
+    url: jdbc:postgresql://${SERVER_IP:localhost}:5432/${DB_NAME:springai_knowledge}
     username: postgres
     password: ${PG_PASSWORD}
     hikari:
@@ -20,7 +20,7 @@ spring:
     open-in-view: false
 
   rabbitmq:
-    host: 47.109.80.120
+    host: ${SERVER_IP:localhost}
     username: admin
     password: ${RABBITMQ_PASSWORD}
     listener:

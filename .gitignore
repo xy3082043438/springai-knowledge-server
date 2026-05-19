@@ -1,4 +1,10 @@
 HELP.md
+
+### Local secrets ###
+.env
+*.env
+!.env.example
+
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -32,4 +38,7 @@ build/
 ### VS Code ###
 .vscode/
 /data/
+
+### Claude Code local settings ###
+.claude/
 /src/test/java/com/lamb/springaiknowledgeserver/service/UserServiceTest.java
