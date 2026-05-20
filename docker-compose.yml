@@ -1,23 +1,32 @@
+name: springai-knowledge
+
+x-restart-policy: &restart_policy
+  restart: unless-stopped
+
+x-timezone: &timezone
+  TZ: Asia/Shanghai
+
 services:
   postgres:
+    <<: *restart_policy
     build:
       context: ./docker
-      dockerfile: postgres.Dockerfile
+      dockerfile_inline: |
+        FROM pgvector/pgvector:0.8.2-pg17
+        COPY postgres-init.sql /docker-entrypoint-initdb.d/01-init.sql
     image: springai-postgres:1.0.0
-    pull_policy: never
     container_name: springai-postgres
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: springai_knowledge
+      <<: *timezone
+      POSTGRES_DB: ${DB_NAME:-springai_knowledge}
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
-      TZ: Asia/Shanghai
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD is required}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d springai_knowledge"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-springai_knowledge}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,16 +34,16 @@ services:
       - springai-net
 
   rabbitmq:
+    <<: *restart_policy
     image: rabbitmq:4.3-management-alpine
     container_name: springai-rabbitmq
-    restart: unless-stopped
     environment:
+      <<: *timezone
       RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
-      TZ: Asia/Shanghai
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -46,6 +55,7 @@ services:
       - springai-net
 
   app:
+    <<: *restart_policy
     build:
       context: .
       dockerfile_inline: |
@@ -58,36 +68,33 @@ services:
         EXPOSE 8080
         ENTRYPOINT ["java","-jar","/app/app.jar"]
     image: springai-knowledge-server:1.0.0
-    pull_policy: never
     container_name: springai-app
-    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     ports:
-      - "80:8080"
+      - "${APP_PORT:-80}:8080"
     environment:
-      # Override hardcoded remote IPs in application.yml via Spring relaxed binding
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/springai_knowledge
+      <<: *timezone
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-springai_knowledge}
       SPRING_DATASOURCE_USERNAME: postgres
-      PG_PASSWORD: ${PG_PASSWORD}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD is required}
+      PG_PASSWORD: ${PG_PASSWORD:?PG_PASSWORD is required}
 
-      # 初始化场景:首次启动让 Hibernate 按 Entity 自动建表;后续启动也安全(只增不删)
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
 
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
 
-      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:?SILICONFLOW_API_KEY is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
-
-      TZ: Asia/Shanghai
     volumes:
       - app_data:/app/data
     healthcheck:
