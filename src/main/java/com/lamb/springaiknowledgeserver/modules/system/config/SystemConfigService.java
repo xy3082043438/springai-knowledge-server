@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -60,11 +59,6 @@ public class SystemConfigService {
     @Transactional(readOnly = true)
     public List<SystemConfig> listAll() {
         return systemConfigRepository.findAll();
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<SystemConfig> findByKey(String key) {
-        return systemConfigRepository.findByConfigKey(key);
     }
 
     @Transactional

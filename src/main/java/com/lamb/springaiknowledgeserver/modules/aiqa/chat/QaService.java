@@ -71,53 +71,6 @@ public class QaService {
     @Value("${spring.ai.openai.chat.options.model:}")
     private String defaultChatModel;
 
-    public QaResponse answer(Long userId, String username, String roleName, String question, Long sessionId) {
-        Long activeSessionId = ensureSession(userId, sessionId, question);
-        List<HybridSearchService.HybridChunk> chunks;
-        try {
-            chunks = hybridSearchService.search(roleName, question);
-            chunks = rerankService.rerank(question, chunks);
-        } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "检索知识库信息时发生异常，请稍后重试", ex);
-        }
-        
-        List<DocumentResponse> documents = List.of();
-        List<QaSourceResponse> sources = List.of();
-        if (chunks.isEmpty()) {
-            Long qaLogId = logQa(userId, username, activeSessionId, DEFAULT_NO_ANSWER, documents, roleName, question, sources);
-            return new QaResponse(DEFAULT_NO_ANSWER, List.of(), List.of(), qaLogId, activeSessionId);
-        }
-
-        String context = buildContext(chunks);
-        OpenAiChatOptions options = buildChatOptions();
-        List<Message> history = getChatHistory(activeSessionId);
-        
-        String answer;
-        try {
-            answer = chatClient.prompt()
-                .options(options)
-                .system(systemPrompt())
-                .messages(history)
-                .user(userPrompt(question, context))
-                .call()
-                .content();
-        } catch (Exception ex) {
-            if (isTimeoutException(ex)) {
-                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "大模型思考超时，由于当前并发量较高，请您稍后再试", ex);
-            }
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "连接大模型服务时发生网络波动，请联系系统管理员进行排查", ex);
-        }
-        if (answer == null || answer.isBlank()) {
-            answer = DEFAULT_NO_ANSWER;
-        }
-        answer = enforceMaxAnswerChars(answer);
-
-        documents = resolveDocuments(chunks, roleName);
-        sources = buildSources(chunks);
-        Long qaLogId = logQa(userId, username, activeSessionId, answer, documents, roleName, question, sources);
-        return new QaResponse(answer, documents, sources, qaLogId, activeSessionId);
-    }
-
     public Flux<QaResponse> streamAnswer(Long userId, String username, String roleName, String question, Long sessionId) {
         Long activeSessionId = ensureSession(userId, sessionId, question);
         List<HybridSearchService.HybridChunk> chunks;

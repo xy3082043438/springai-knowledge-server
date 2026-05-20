@@ -24,7 +24,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - /opt/docker/springai-knowledge/postgresql/data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-springai_knowledge}"]
       interval: 5s
@@ -45,7 +45,7 @@ services:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - /opt/docker/springai-knowledge/rabbitmq:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -96,7 +96,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     volumes:
-      - app_data:/app/data
+      - /opt/docker/springai-knowledge/app/data:/app/data
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
@@ -109,8 +109,3 @@ services:
 networks:
   springai-net:
     driver: bridge
-
-volumes:
-  pg_data:
-  rabbitmq_data:
-  app_data:

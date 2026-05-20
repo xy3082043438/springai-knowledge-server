@@ -1,6 +1,5 @@
 package com.lamb.springaiknowledgeserver.modules.system.role;
 
-import com.lamb.springaiknowledgeserver.modules.system.role.PermissionOptionResponse;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleCreateRequest;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleResponse;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleUpdateRequest;
@@ -9,7 +8,6 @@ import com.lamb.springaiknowledgeserver.modules.system.role.Role;
 import com.lamb.springaiknowledgeserver.modules.knowledge.document.DocumentRepository;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleRepository;
 import com.lamb.springaiknowledgeserver.modules.system.user.UserRepository;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -39,19 +37,9 @@ public class RoleService {
             .toList();
     }
 
-    public List<PermissionOptionResponse> listPermissionOptions() {
-        return Arrays.stream(Permission.values())
-            .map(this::toPermissionOption)
-            .toList();
-    }
-
     public Role getById(Long id) {
         return roleRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法完成操作，您指定的角色似乎不存在"));
-    }
-
-    public RoleResponse getResponseById(Long id) {
-        return toResponse(getById(id));
     }
 
     public Role create(RoleCreateRequest request) {
@@ -129,56 +117,6 @@ public class RoleService {
 
     private boolean isSystemRole(String roleName) {
         return roleName != null && SYSTEM_ROLE_NAMES.contains(roleName);
-    }
-
-    private PermissionOptionResponse toPermissionOption(Permission permission) {
-        return switch (permission) {
-            case USER_READ -> new PermissionOptionResponse(
-                permission.name(), "USER", "用户", "查看用户", "允许查看用户列表和详情"
-            );
-            case USER_WRITE -> new PermissionOptionResponse(
-                permission.name(), "USER", "用户", "管理用户", "允许新增、修改和删除用户"
-            );
-            case ROLE_READ -> new PermissionOptionResponse(
-                permission.name(), "ROLE", "角色", "查看角色", "允许查看角色详情、权限清单和使用情况"
-            );
-            case ROLE_WRITE -> new PermissionOptionResponse(
-                permission.name(), "ROLE", "角色", "管理角色", "允许新增、修改、删除角色并分配权限"
-            );
-            case DOC_READ -> new PermissionOptionResponse(
-                permission.name(), "DOC", "文档", "查看文档", "允许查看知识库文档并执行问答"
-            );
-            case DOC_WRITE -> new PermissionOptionResponse(
-                permission.name(), "DOC", "文档", "管理文档", "允许上传、编辑、删除文档和重建索引"
-            );
-            case CONFIG_READ -> new PermissionOptionResponse(
-                permission.name(), "CONFIG", "配置", "查看配置", "允许查看系统配置项"
-            );
-            case CONFIG_WRITE -> new PermissionOptionResponse(
-                permission.name(), "CONFIG", "配置", "管理配置", "允许修改并刷新系统配置项"
-            );
-            case LOG_READ -> new PermissionOptionResponse(
-                permission.name(), "LOG", "日志", "查看日志", "允许查看操作日志、问答日志和数据大屏"
-            );
-            case LOG_WRITE -> new PermissionOptionResponse(
-                permission.name(), "LOG", "日志", "管理日志", "允许执行日志清理和维护操作"
-            );
-            case LOG_EXPORT -> new PermissionOptionResponse(
-                permission.name(), "LOG", "日志", "导出日志", "允许将操作日志和问答日志导出为 Excel 文件"
-            );
-            case FEEDBACK_READ -> new PermissionOptionResponse(
-                permission.name(), "FEEDBACK", "反馈", "查看反馈", "允许查看问答反馈记录"
-            );
-            case FEEDBACK_WRITE -> new PermissionOptionResponse(
-                permission.name(), "FEEDBACK", "反馈", "处理反馈", "允许提交和审核问答反馈"
-            );
-            case DASHBOARD_READ -> new PermissionOptionResponse(
-                permission.name(), "DASHBOARD", "看板", "查看概览", "允许查看系统运行数据大屏和统计图表"
-            );
-            case QA_READ -> new PermissionOptionResponse(
-                permission.name(), "QA", "智答", "提问咨询", "开启与 AI 助手的对话能力及获取常见问题建议"
-            );
-        };
     }
 }
 

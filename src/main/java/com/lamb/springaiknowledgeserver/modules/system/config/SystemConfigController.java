@@ -2,7 +2,6 @@ package com.lamb.springaiknowledgeserver.modules.system.config;
 
 import com.lamb.springaiknowledgeserver.modules.system.config.SystemConfigRequest;
 import com.lamb.springaiknowledgeserver.modules.system.config.SystemConfigResponse;
-import com.lamb.springaiknowledgeserver.modules.system.config.SystemConfig;
 import com.lamb.springaiknowledgeserver.modules.system.log.OperationLogService;
 import com.lamb.springaiknowledgeserver.modules.system.config.SystemConfigService;
 import com.lamb.springaiknowledgeserver.core.util.RequestUtils;
@@ -14,15 +13,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
 @RequestMapping("/api/config")
@@ -48,29 +45,6 @@ public class SystemConfigController {
             "CONFIG",
             null,
             "list",
-            RequestUtils.resolveClientIp(httpRequest),
-            true
-        );
-        return response;
-    }
-
-    @PreAuthorize("hasAuthority('CONFIG_READ')")
-    @GetMapping("/{key}")
-    public SystemConfigResponse get(
-        @AuthenticationPrincipal UserPrincipal principal,
-        @PathVariable String key,
-        HttpServletRequest httpRequest
-    ) {
-        SystemConfig config = systemConfigService.findByKey(key)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取，该配置项可能已被移除"));
-        SystemConfigResponse response = SystemConfigResponse.from(config);
-        operationLogService.log(
-            principal.getId(),
-            principal.getUsername(),
-            "CONFIG_VIEW",
-            "CONFIG",
-            key,
-            "config=" + key,
             RequestUtils.resolveClientIp(httpRequest),
             true
         );

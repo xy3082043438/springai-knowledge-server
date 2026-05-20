@@ -72,7 +72,6 @@ public class DocumentService {
     private final RoleRepository roleRepository;
     private final VectorStore vectorStore;
     private final SystemConfigService systemConfigService;
-    private final DocumentAsyncService documentAsyncService; // 供保留的方法调用
     private final DocumentProcessorHelper documentProcessorHelper;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
@@ -163,42 +162,6 @@ public class DocumentService {
             documentProcessorHelper.rebuildChunks(saved);
         } else if (rolesChanged || titleChanged) {
             documentProcessorHelper.refreshVectorMetadata(saved);
-        }
-        return saved;
-    }
-
-    @Transactional
-    public Document replaceFile(Long id, MultipartFile file, String title, Collection<String> roleNames) {
-        Document document = documentRepository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "无法读取文档，它可能已被删除或移除"));
-        if (file == null || file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未检测到文件，请先选择需要上传的文件");
-        }
-        String originalName = file.getOriginalFilename() == null ? "file" : file.getOriginalFilename();
-        String safeName = originalName.replaceAll("[\\\\/]+", "_");
-        
-        DocumentFileType fileType = documentProcessorHelper.resolveUploadFileType(file.getContentType(), safeName);
-        Path target = storeFile(file, safeName);
-        String oldPath = document.getStoragePath();
-
-        if (title != null && !title.isBlank()) {
-            document.setTitle(title);
-        }
-        if (roleNames != null && !roleNames.isEmpty()) {
-            document.setAllowedRoles(resolveRoles(roleNames));
-        }
-        document.setContent("");
-        document.setFileName(safeName);
-        document.setContentType(fileType.defaultContentType);
-        document.setFileSize(file.getSize());
-        document.setStoragePath(target.toString());
-        document.setStatus(DocumentStatus.PARSING);
-
-        Document saved = documentRepository.save(document);
-        eventPublisher.publishEvent(new DocumentTaskEvent(
-            saved.getId(), "PARSE", file.getContentType(), safeName));
-        if (oldPath != null && !oldPath.isBlank()) {
-            deleteFileIfExists(oldPath);
         }
         return saved;
     }
@@ -378,7 +341,6 @@ public class DocumentService {
 
 
 }
-
 
 
 

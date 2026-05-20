@@ -151,34 +151,6 @@ public class DocumentController {
     }
 
     @PreAuthorize("hasAuthority('DOC_WRITE')")
-    @PostMapping(value = "/{id}/file", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public DocumentSummaryResponse replaceFile(
-        @AuthenticationPrincipal UserPrincipal principal,
-        @PathVariable Long id,
-        @RequestParam("file") MultipartFile file,
-        @RequestParam(value = "allowedRoles", required = false) List<String> allowedRoles,
-        @RequestParam(value = "title", required = false) String title,
-        HttpServletRequest httpRequest
-    ) {
-        List<String> normalized = allowedRoles == null ? null : normalizeRoles(allowedRoles);
-        if (normalized != null && normalized.isEmpty()) {
-            normalized = null;
-        }
-        Document document = documentService.replaceFile(id, file, title, normalized);
-        operationLogService.log(
-            principal.getId(),
-            principal.getUsername(),
-            "DOC_REPLACE_FILE",
-            "DOCUMENT",
-            String.valueOf(document.getId()),
-            "title=" + document.getTitle(),
-            RequestUtils.resolveClientIp(httpRequest),
-            true
-        );
-        return DocumentSummaryResponse.from(document);
-    }
-
-    @PreAuthorize("hasAuthority('DOC_WRITE')")
     @PostMapping
     public DocumentResponse create(
         @AuthenticationPrincipal UserPrincipal principal,
@@ -293,9 +265,6 @@ public class DocumentController {
         Document document = documentRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文档不存在"));
 
-        System.out.println("DEBUG: Requesting file preview for ID=" + id);
-        System.out.println("DEBUG: Document Storage Path in DB=" + document.getStoragePath());
-        
         org.springframework.core.io.Resource resource = documentService.getFileAsResource(id, roleName);
         
         String encodedFileName = java.net.URLEncoder.encode(document.getFileName(), java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");

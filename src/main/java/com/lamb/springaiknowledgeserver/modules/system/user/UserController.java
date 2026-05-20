@@ -115,27 +115,6 @@ public class UserController {
         return response;
     }
 
-    @PreAuthorize("hasAuthority('USER_READ')")
-    @GetMapping("/{id}")
-    public UserResponse get(
-        @AuthenticationPrincipal UserPrincipal principal,
-        @PathVariable Long id,
-        HttpServletRequest httpRequest
-    ) {
-        User user = userService.getById(id);
-        operationLogService.log(
-            principal.getId(),
-            principal.getUsername(),
-            "USER_VIEW",
-            "USER",
-            String.valueOf(user.getId()),
-            "username=" + user.getUsername(),
-            RequestUtils.resolveClientIp(httpRequest),
-            true
-        );
-        return UserResponse.from(user);
-    }
-
     @PreAuthorize("hasAuthority('USER_WRITE')")
     @PostMapping
     public UserResponse create(

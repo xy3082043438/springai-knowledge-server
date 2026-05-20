@@ -1,7 +1,6 @@
 package com.lamb.springaiknowledgeserver.modules.system.role;
 
 import com.lamb.springaiknowledgeserver.security.auth.UserPrincipal;
-import com.lamb.springaiknowledgeserver.modules.system.role.PermissionOptionResponse;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleCreateRequest;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleResponse;
 import com.lamb.springaiknowledgeserver.modules.system.role.RoleUpdateRequest;
@@ -16,13 +15,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -46,47 +45,6 @@ public class RoleController {
             "ROLE",
             null,
             "list",
-            RequestUtils.resolveClientIp(httpRequest),
-            true
-        );
-        return response;
-    }
-
-    @PreAuthorize("hasAuthority('ROLE_READ')")
-    @GetMapping("/{id}")
-    public RoleResponse get(
-        @AuthenticationPrincipal UserPrincipal principal,
-        @PathVariable Long id,
-        HttpServletRequest httpRequest
-    ) {
-        RoleResponse response = roleService.getResponseById(id);
-        operationLogService.log(
-            principal.getId(),
-            principal.getUsername(),
-            "ROLE_VIEW",
-            "ROLE",
-            String.valueOf(id),
-            "role=" + response.getName(),
-            RequestUtils.resolveClientIp(httpRequest),
-            true
-        );
-        return response;
-    }
-
-    @PreAuthorize("hasAuthority('ROLE_READ')")
-    @GetMapping("/permissions")
-    public List<PermissionOptionResponse> permissions(
-        @AuthenticationPrincipal UserPrincipal principal,
-        HttpServletRequest httpRequest
-    ) {
-        List<PermissionOptionResponse> response = roleService.listPermissionOptions();
-        operationLogService.log(
-            principal.getId(),
-            principal.getUsername(),
-            "ROLE_PERMISSION_LIST",
-            "ROLE",
-            null,
-            "permissions",
             RequestUtils.resolveClientIp(httpRequest),
             true
         );
