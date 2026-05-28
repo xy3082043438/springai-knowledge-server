@@ -5,18 +5,18 @@
 [![Spring AI](https://img.shields.io/badge/Spring%20AI-2.0.0--M4-green.svg)](https://spring.io/projects/spring-ai)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://www.postgresql.org/)
 
-**SpringAI Knowledge** 项目的后端服务，基于 Spring Boot 4 + Spring AI 构建，提供企业级私有化知识库管理、文档异步向量化、混合检索 + 重排，以及大模型 RAG（检索增强生成）智能问答能力。
+**SpringAI Knowledge** 项目的后端服务，基于 Spring Boot 4 + Spring AI 构建，提供知识库管理、文档异步向量化、混合检索 + 重排，以及大模型 RAG（检索增强生成）问答接口。
 
 > 本项目为前后端分离架构，此处为**后端仓库**。配套的前端控制台（Vue 3 + Vite）见 [springai-knowledge-web](https://github.com/xy3082043438/springai-knowledge-web)。
 
 ## ✨ 核心特性
 
 - **📄 多格式文档解析与切分**：集成 Apache PDFBox / POI / Jsoup，支持 PDF、Word、TXT、Markdown、HTML 等格式的解析、分块（Chunking）与入库。
-- **🔍 混合检索 + 重排 RAG 引擎**：基于 PostgreSQL `pgvector` 的向量检索，叠加重排模型（Rerank）提升相关性，结合大模型实现带来源引用的流式（SSE）问答。
-- **⚡ 异步文档处理**：基于 RabbitMQ 的异步非阻塞流水线进行解析、切分与向量化，避免大文件阻塞主线程，提升吞吐。
-- **🛡️ RBAC 安全认证**：Spring Security + JWT 无状态认证，配合 Easy Captcha（滑块 / 点选验证码），实现用户—角色—权限的细粒度访问控制与文档可见性管理。
-- **⚙️ 动态系统配置**：支持在线调整分块策略、混合检索权重、大模型生成参数（Temperature / TopP 等）及 Prompt 模板。
-- **📊 审计与监控**：完整的操作日志与问答日志追踪，支持用户对答案反馈；集成 Spring Boot Actuator 健康检查与监控端点。
+- **🔍 混合检索 + 重排 RAG**：基于 PostgreSQL `pgvector` 的向量检索，叠加 Rerank 模型对结果重排，再由大模型生成带来源引用的 SSE 流式回答。
+- **⚡ 异步文档处理**：通过 RabbitMQ 将解析、切分与向量化放入异步队列，避免大文件阻塞主请求线程。
+- **🛡️ RBAC 鉴权**：Spring Security + JWT 无状态认证，配合 Easy Captcha（滑块 / 点选验证码），按用户—角色—权限三级模型控制访问，并支持配置文档可见性。
+- **⚙️ 运行时配置**：支持在线调整分块策略、混合检索权重、大模型生成参数（Temperature / TopP 等）与 Prompt 模板。
+- **📊 日志与监控**：记录操作日志与问答日志，支持用户对答案反馈；通过 Spring Boot Actuator 暴露健康检查与监控端点。
 
 ## 🛠️ 技术栈
 
@@ -110,7 +110,7 @@ export JWT_SECRET=your-jwt-secret
 - **Swagger UI**：[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
 - **健康检查**：[http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
 
-初始管理员账号由 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 指定（默认用户名 `admin`），应用首次启动时自动初始化。⚠️ 生产环境请务必修改默认凭据与 `JWT_SECRET`。
+初始管理员账号由 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 指定（默认用户名 `admin`），应用首次启动时自动写入数据库。生产环境部署前请修改默认凭据与 `JWT_SECRET`。
 
 ## 🤝 贡献规范
 
