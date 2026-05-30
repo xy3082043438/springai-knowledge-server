@@ -66,7 +66,7 @@ CREATE DATABASE springai_knowledge;
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-> 也可使用根目录 `docker-compose.yml`（内置 `dockerfile_inline`，基于 `pgvector/pgvector` 镜像并执行 [`docker/postgres-init.sql`](docker/postgres-init.sql)）一键构建带 pgvector 的数据库。应用启动时 Spring AI 会自动初始化向量表，JPA 会按 `ddl-auto` 构建业务表结构。
+> 也可使用根目录 `docker-compose.yml` 一键编排：数据库镜像由 [`docker/postgres.Dockerfile`](docker/postgres.Dockerfile)（基于 `pgvector/pgvector` 并执行 [`docker/postgres-init.sql`](docker/postgres-init.sql)）构建，应用镜像由根目录 [`Dockerfile`](Dockerfile) 构建。应用启动时 Spring AI 会自动初始化向量表，JPA 会按 `ddl-auto` 构建业务表结构。
 
 ### 3. 配置环境变量
 

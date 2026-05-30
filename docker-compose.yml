@@ -11,9 +11,7 @@ services:
     <<: *restart_policy
     build:
       context: ./docker
-      dockerfile_inline: |
-        FROM pgvector/pgvector:0.8.2-pg17
-        COPY postgres-init.sql /docker-entrypoint-initdb.d/01-init.sql
+      dockerfile: postgres.Dockerfile
     image: springai-postgres:1.0.0
     container_name: springai-postgres
     environment:
@@ -58,15 +56,7 @@ services:
     <<: *restart_policy
     build:
       context: .
-      dockerfile_inline: |
-        FROM eclipse-temurin:21-jre-jammy
-        WORKDIR /app
-        # curl 用于 docker-compose 的 healthcheck (actuator/health)
-        RUN apt-get update && apt-get install -y --no-install-recommends curl \
-            && rm -rf /var/lib/apt/lists/*
-        COPY target/springai-knowledge-server-1.0.0.jar app.jar
-        EXPOSE 8080
-        ENTRYPOINT ["java","-jar","/app/app.jar"]
+      dockerfile: Dockerfile
     image: springai-knowledge-server:1.0.0
     container_name: springai-app
     depends_on:
