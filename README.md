@@ -45,8 +45,7 @@ src/main/
 │       ├── knowledge/   # 知识库：文档 (document) 解析、分块、向量检索
 │       └── system/      # 系统管理：config / dashboard / log / role / upload / user
 └── resources/
-    ├── application.yml  # 环境与系统配置（通过环境变量注入敏感项）
-    └── captcha/         # 验证码底图资源
+    └── application.yml  # 环境与系统配置（通过环境变量注入敏感项）
 ```
 
 ## 🚀 快速开始
@@ -56,7 +55,7 @@ src/main/
 - **JDK 21**
 - **Maven 3.9+**（也可直接使用自带的 `mvnw` / `mvnw.cmd`）
 - **PostgreSQL 15+**（必须启用 `vector` 扩展）
-- **RabbitMQ 3.x**
+- **RabbitMQ 3.x / 4.x**（部署镜像为 `rabbitmq:4.3`）
 - **大模型 API Key**：兼容 OpenAI 的接口（默认 SiliconFlow，亦可用阿里云百炼等）
 
 ### 2. 数据库初始化
@@ -67,7 +66,7 @@ CREATE DATABASE springai_knowledge;
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-> 也可使用 [`docker/`](docker/) 下的 `postgres.Dockerfile` 与 `postgres-init.sql` 构建带 pgvector 的镜像。应用启动时 Spring AI 会自动初始化向量表，JPA 会按 `ddl-auto` 构建业务表结构。
+> 也可使用根目录 `docker-compose.yml`（内置 `dockerfile_inline`，基于 `pgvector/pgvector` 镜像并执行 [`docker/postgres-init.sql`](docker/postgres-init.sql)）一键构建带 pgvector 的数据库。应用启动时 Spring AI 会自动初始化向量表，JPA 会按 `ddl-auto` 构建业务表结构。
 
 ### 3. 配置环境变量
 
