@@ -61,6 +61,9 @@ public class Document {
     @Column(columnDefinition = "text")
     private String suggestedQuestions;
 
+    @Column(columnDefinition = "text")
+    private String summary;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "app_document_role",

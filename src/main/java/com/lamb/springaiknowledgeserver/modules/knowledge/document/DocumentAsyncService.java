@@ -93,6 +93,8 @@ public class DocumentAsyncService {
 
             processorHelper.processAndIndex(document, fileBytes, contentType, fileName);
 
+            String summary = qaService.generateSummary(document.getTitle(), document.getContent());
+            document.setSummary(summary);
             String suggestions = qaService.generateSuggestedQuestions(document.getTitle(), document.getContent());
             document.setSuggestedQuestions(suggestions);
 
@@ -123,6 +125,8 @@ public class DocumentAsyncService {
 
             processorHelper.rebuildChunks(document);
 
+            String summary = qaService.generateSummary(document.getTitle(), document.getContent());
+            document.setSummary(summary);
             String suggestions = qaService.generateSuggestedQuestions(document.getTitle(), document.getContent());
             document.setSuggestedQuestions(suggestions);
 

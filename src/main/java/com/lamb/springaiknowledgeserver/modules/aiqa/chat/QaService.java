@@ -171,6 +171,33 @@ public class QaService {
         return "[]";
     }
 
+    public String generateSummary(String title, String content) {
+        if (content == null || content.isBlank()) {
+            return null;
+        }
+
+        // Take first 2000 chars as context to keep the summary call fast and cheap.
+        String excerpt = content.substring(0, Math.min(content.length(), 2000));
+
+        try {
+            String prompt = PromptTemplates.DOCUMENT_SUMMARY_TEMPLATE
+                .replace("{content}", "标题: " + title + "\n\n内容: " + excerpt);
+
+            String response = chatClient.prompt()
+                .system(prompt)
+                .call()
+                .content();
+
+            if (response != null && !response.isBlank()) {
+                String summary = response.trim();
+                return summary.length() > 500 ? summary.substring(0, 500) : summary;
+            }
+        } catch (Exception ex) {
+            log.error("Failed to generate summary for {}", title, ex);
+        }
+        return null;
+    }
+
     private List<String> parseQuestions(String json) {
         try {
             return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));

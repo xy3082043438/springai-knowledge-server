@@ -45,18 +45,25 @@ public class HybridSearchService {
     @Value("${app.hybrid.top-k:6}")
     private int fusedTopK;
 
+    @Value("${app.hybrid.rrf-k:60}")
+    private int rrfK;
+
     public List<HybridChunk> search(String roleName, String query) {
         List<VectorHit> vectorHits = vectorSearch(roleName, query);
         List<KeywordHit> keywordHits = keywordSearch(roleName, query);
 
+        // RRF（Reciprocal Rank Fusion）按各检索通道内的排名做倒数融合，
+        // 排名越靠前贡献越大，再按通道权重加权合并，避免向量/关键词分数量纲不一致的问题。
         Map<Long, HybridChunkBuilder> merged = new LinkedHashMap<>();
-        for (VectorHit hit : vectorHits) {
+        for (int rank = 0; rank < vectorHits.size(); rank++) {
+            VectorHit hit = vectorHits.get(rank);
             HybridChunkBuilder builder = merged.computeIfAbsent(hit.chunkId, id -> new HybridChunkBuilder());
-            builder.applyVector(hit);
+            builder.applyVector(hit, rank + 1);
         }
-        for (KeywordHit hit : keywordHits) {
+        for (int rank = 0; rank < keywordHits.size(); rank++) {
+            KeywordHit hit = keywordHits.get(rank);
             HybridChunkBuilder builder = merged.computeIfAbsent(hit.chunkId, id -> new HybridChunkBuilder());
-            builder.applyKeyword(hit);
+            builder.applyKeyword(hit, rank + 1);
         }
 
         double resolvedVectorWeight = resolveVectorWeight();
@@ -64,10 +71,11 @@ public class HybridSearchService {
         double totalWeight = Math.max(0, resolvedVectorWeight) + Math.max(0, resolvedKeywordWeight);
         double vWeight = totalWeight > 0 ? Math.max(0, resolvedVectorWeight) / totalWeight : 0.5;
         double kWeight = totalWeight > 0 ? Math.max(0, resolvedKeywordWeight) / totalWeight : 0.5;
+        int k = Math.max(1, resolveRrfK());
 
         List<HybridChunk> results = new ArrayList<>();
         for (HybridChunkBuilder builder : merged.values()) {
-            builder.finalizeScore(vWeight, kWeight);
+            builder.finalizeScore(vWeight, kWeight, k);
             results.add(builder.build());
         }
         results.sort(Comparator.comparingDouble(HybridChunk::combinedScore).reversed());
@@ -230,6 +238,10 @@ public class HybridSearchService {
         return systemConfigService.getInt("hybrid.topK", fusedTopK);
     }
 
+    private int resolveRrfK() {
+        return systemConfigService.getInt("hybrid.rrfK", rrfK);
+    }
+
     public record HybridChunk(
         Long chunkId,
         Long documentId,
@@ -344,8 +356,10 @@ public class HybridSearchService {
         private double vectorScore;
         private double keywordScore;
         private double combinedScore;
+        private int vectorRank = -1;
+        private int keywordRank = -1;
 
-        private void applyVector(VectorHit hit) {
+        private void applyVector(VectorHit hit, int rank) {
             this.chunkId = hit.chunkId;
             this.documentId = hit.documentId;
             this.content = hit.content;
@@ -357,9 +371,12 @@ public class HybridSearchService {
             this.fileName = firstNonNull(this.fileName, hit.fileName);
             this.contentType = firstNonNull(this.contentType, hit.contentType);
             this.vectorScore = Math.max(this.vectorScore, hit.normalizedScore);
+            if (this.vectorRank < 0 || rank < this.vectorRank) {
+                this.vectorRank = rank;
+            }
         }
 
-        private void applyKeyword(KeywordHit hit) {
+        private void applyKeyword(KeywordHit hit, int rank) {
             this.chunkId = hit.chunkId;
             this.documentId = hit.documentId;
             if (this.content == null || this.content.isBlank()) {
@@ -373,10 +390,20 @@ public class HybridSearchService {
             this.fileName = firstNonNull(this.fileName, hit.fileName);
             this.contentType = firstNonNull(this.contentType, hit.contentType);
             this.keywordScore = Math.max(this.keywordScore, hit.normalizedScore);
+            if (this.keywordRank < 0 || rank < this.keywordRank) {
+                this.keywordRank = rank;
+            }
         }
 
-        private void finalizeScore(double vectorWeight, double keywordWeight) {
-            this.combinedScore = vectorWeight * vectorScore + keywordWeight * keywordScore;
+        private void finalizeScore(double vectorWeight, double keywordWeight, int k) {
+            double score = 0.0;
+            if (vectorRank > 0) {
+                score += vectorWeight * (1.0 / (k + vectorRank));
+            }
+            if (keywordRank > 0) {
+                score += keywordWeight * (1.0 / (k + keywordRank));
+            }
+            this.combinedScore = score;
         }
 
         private HybridChunk build() {

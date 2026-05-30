@@ -16,6 +16,7 @@ public class DocumentResponse {
     private Long id;
     private String title;
     private String content;
+    private String summary;
     private String fileName;
     private String contentType;
     private long fileSize;
@@ -29,6 +30,7 @@ public class DocumentResponse {
             document.getId(),
             document.getTitle(),
             document.getContent(),
+            document.getSummary(),
             document.getFileName(),
             document.getContentType(),
             document.getFileSize(),

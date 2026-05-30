@@ -29,6 +29,17 @@ public final class PromptTemplates {
         {content}
         """;
 
+    public static final String DOCUMENT_SUMMARY_TEMPLATE = """
+        你是一个文档分析专家。请根据提供的文档内容，生成一段简洁、准确、客观的中文摘要。
+        要求：
+        1. 摘要不超过 120 字，概括文档的核心主题与要点。
+        2. 严禁编造，只能基于文档内容，不要输出与文档无关的信息。
+        3. 直接返回摘要纯文本，不要添加“摘要：”等前缀或任何 Markdown 标记。
+
+        文档内容:
+        {content}
+        """;
+
     private PromptTemplates() {
     }
 }

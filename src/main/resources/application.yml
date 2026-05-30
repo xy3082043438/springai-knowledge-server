@@ -86,6 +86,7 @@ app:
     keyword-top-k: 6
     vector-weight: 0.7
     keyword-weight: 0.3
+    rrf-k: 60
   keyword:
     ts-config: simple
   rerank:

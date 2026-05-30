@@ -11,8 +11,8 @@
 
 ## ✨ 核心特性
 
-- **📄 多格式文档解析与切分**：集成 Apache PDFBox / POI / Jsoup，支持 PDF、Word、TXT、Markdown、HTML 等格式的解析、分块（Chunking）与入库。
-- **🔍 混合检索 + 重排 RAG**：基于 PostgreSQL `pgvector` 的向量检索，叠加 Rerank 模型对结果重排，再由大模型生成带来源引用的 SSE 流式回答。
+- **📄 多格式文档解析与切分**：集成 Apache PDFBox / POI / Jsoup，支持 PDF、Word、PPTX、XLSX、TXT、Markdown、HTML、CSV 等格式的解析、分块（Chunking）与入库，并在解析过程中自动生成文档摘要与 AI 推荐问题。
+- **🔍 混合检索 + RRF 融合 + 重排 RAG**：基于 PostgreSQL `pgvector` 的向量检索叠加全文检索，通过 RRF（Reciprocal Rank Fusion）按排名融合两路结果，再用 Rerank 模型二次重排，最终由大模型生成带来源引用的 SSE 流式回答。
 - **⚡ 异步文档处理**：通过 RabbitMQ 将解析、切分与向量化放入异步队列，避免大文件阻塞主请求线程。
 - **🛡️ RBAC 鉴权**：Spring Security + JWT 无状态认证，配合 Easy Captcha（滑块 / 点选验证码），按用户—角色—权限三级模型控制访问，并支持配置文档可见性。
 - **⚙️ 运行时配置**：支持在线调整分块策略、混合检索权重、大模型生成参数（Temperature / TopP 等）与 Prompt 模板。
